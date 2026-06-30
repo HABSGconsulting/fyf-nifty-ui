@@ -2,7 +2,7 @@
 
 Public frontend for the **NIFTY 50 Daily Waterfall Chart** — a static site served via Cloudflare Pages that reads chart data from Cloudflare KV and renders it entirely in the browser.
 
-Live at **[index.fundyourfreedom.in](https://index.fundyourfreedom.in)**
+Live at **[markets.fundyourfreedom.in](https://markets.fundyourfreedom.in)**
 
 ---
 
@@ -16,6 +16,8 @@ A single-page, zero-framework chart dashboard that shows:
 - Gap analysis, volatility regime, momentum (SMA 20/50, RSI 14), and streak cards
 
 Data is written to Cloudflare KV by the private pipeline repo [`fyf-nifty-engine`](https://github.com/HABSGconsulting/fyf-nifty-engine) every weekday at **4:05 PM IST**. This repo never touches the data — it only reads it.
+
+`markets.fundyourfreedom.in` is planned as the home for all FYF market data tools. NIFTY 50 is the first instrument. Sensex, Bank Nifty, Gold, and FD rate trackers may follow in future phases.
 
 ---
 
@@ -77,8 +79,8 @@ Edit `wrangler.toml` and replace the placeholders:
 ```toml
 [[kv_namespaces]]
 binding    = "NIFTY_CHART_DATA"
-id         = "YOUR_KV_NAMESPACE_ID"          # from Dashboard → KV → your namespace
-preview_id = "YOUR_KV_PREVIEW_NAMESPACE_ID"  # can be same as id for simplicity
+id         = "YOUR_KV_NAMESPACE_ID"
+preview_id = "YOUR_KV_PREVIEW_NAMESPACE_ID"
 ```
 
 ### Step 2 — Connect to Cloudflare Pages
@@ -105,22 +107,17 @@ Cloudflare Pages will auto-deploy on every push to `main`.
 
 In `fyf-nifty-engine`, trigger the GitHub Actions workflow manually. This writes the first `chart-data` payload to KV. The chart will be blank until this runs.
 
-### Step 5 — Set custom domain (optional)
+### Step 5 — Set custom domain
 
-Dashboard → your Pages project → Custom domains → Add `index.fundyourfreedom.in`
+Dashboard → your Pages project → Custom domains → Add `markets.fundyourfreedom.in`
 
 ---
 
 ## Local Development
 
 ```bash
-# Install wrangler
 npm install -g wrangler
-
-# Authenticate
 wrangler login
-
-# Run locally (serves public/ + worker at localhost:8788)
 npx wrangler pages dev public --kv NIFTY_CHART_DATA
 ```
 
@@ -158,6 +155,20 @@ Full schema defined in `fyf-nifty-engine/docs/`.
 | Fonts | Satoshi (Fontshare) + Instrument Serif (Google Fonts) |
 | Styling | Plain CSS — no framework, no build step |
 | JS | Vanilla ES2020 IIFE — no bundler, no framework |
+
+---
+
+## Roadmap
+
+`markets.fundyourfreedom.in` is the umbrella for all FYF live market data.
+
+| Instrument | Status |
+|---|---|
+| NIFTY 50 waterfall chart | ✅ Phase 1 |
+| Sensex waterfall chart | Planned |
+| Bank Nifty waterfall chart | Planned |
+| Gold price tracker | Planned |
+| FD rate tracker | Planned |
 
 ---
 
