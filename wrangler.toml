@@ -23,8 +23,8 @@ compatibility_date = "2025-01-01"
 
 [[kv_namespaces]]
 binding  = "NIFTY_CHART_DATA"   # name used in worker/index.js as env.NIFTY_CHART_DATA
-id       = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
-preview_id = "REPLACE_WITH_YOUR_KV_PREVIEW_NAMESPACE_ID"  # used by `wrangler pages dev`
+id       = "47da474c07314acabd6a044951afe270"
+preview_id = "47da474c07314acabd6a044951afe270"  # used by `wrangler pages dev`
 
 # ── Routes ───────────────────────────────────────────────────────
 # The Worker file lives at worker/index.js.
