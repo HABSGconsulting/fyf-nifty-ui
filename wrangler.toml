@@ -1,49 +1,17 @@
 # wrangler.toml — fyf-nifty-ui
-# Cloudflare Pages + Workers configuration
+# Cloudflare Pages configuration
 # Docs: https://developers.cloudflare.com/pages/functions/wrangler-configuration/
 
 name = "fyf-nifty-ui"
 pages_build_output_dir = "public"
-
-# ── Compatibility ────────────────────────────────────────────────
-# Use a recent compatibility date so we get modern Workers runtime.
-# Update this once a year when Cloudflare flags it as outdated.
 compatibility_date = "2025-01-01"
 
 # ── KV Namespace binding ─────────────────────────────────────────
-# The Worker reads from this KV namespace.
-# IMPORTANT: Replace the placeholder id values below with your real
-# KV namespace IDs from the Cloudflare dashboard before deploying.
-#
-# How to get your IDs:
-#   Dashboard → Workers & Pages → KV → your namespace → copy ID
-#
-# Or via CLI:
-#   npx wrangler kv namespace list
+# Binding name must match what worker/index.js uses: env.NIFTY_CHART_DATA
+# kv_namespaces is NOT inherited by [env.*] blocks in Pages —
+# so we declare it at the top level only (no [env.*] overrides needed).
 
 [[kv_namespaces]]
-binding  = "NIFTY_CHART_DATA"   # name used in worker/index.js as env.NIFTY_CHART_DATA
-id       = "47da474c07314acabd6a044951afe270"
-preview_id = "47da474c07314acabd6a044951afe270"  # used by `wrangler pages dev`
-
-# ── Routes ───────────────────────────────────────────────────────
-# The Worker file lives at worker/index.js.
-# Cloudflare Pages Functions auto-routes files under /functions/.
-# Because we keep it in /worker/ (not /functions/), we declare the
-# route explicitly here so wrangler knows where to find it.
-#
-# Pattern: /api/chart-data  →  worker/index.js
-
-[[rules]]
-type    = "ESModule"
-globs   = ["worker/**/*.js"]
-
-# ── Environment overrides ────────────────────────────────────────
-# Production and preview share the same KV binding name.
-# If you want a separate preview KV namespace, set preview_id above.
-
-[env.production]
-name = "fyf-nifty-ui"
-
-[env.preview]
-name = "fyf-nifty-ui-preview"
+binding    = "NIFTY_CHART_DATA"
+id         = "47da474c07314acabd6a044951afe270"
+preview_id = "47da474c07314acabd6a044951afe270"
