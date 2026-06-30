@@ -1,0 +1,98 @@
+name: Daily Engine
+
+# Runs every weekday at 4:05 PM IST (10:35 UTC)
+# Also triggerable manually via workflow_dispatch
+
+on:
+  schedule:
+    - cron: '35 10 * * 1-5'
+  workflow_dispatch:
+
+concurrency:
+  group: daily-engine
+  cancel-in-progress: false
+
+jobs:
+  run-pipeline:
+    name: Fetch → Build → Write KV
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+
+    steps:
+      # 1. Checkout this repo (fyf-nifty-ui) — needed for runner context
+      - name: Checkout UI repo
+        uses: actions/checkout@v4
+
+      # 2. Checkout private engine repo into ./engine/
+      - name: Checkout engine repo
+        uses: actions/checkout@v4
+        with:
+          repository: HABSGconsulting/fyf-nifty-engine
+          token: ${{ secrets.GH_PAT }}
+          path: engine
+
+      # 3. Set up Python 3.12
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: engine/requirements.txt
+
+      # 4. Install dependencies
+      - name: Install dependencies
+        run: pip install -r engine/requirements.txt
+
+      # 5. Configure git identity for engine repo commits
+      - name: Configure git
+        run: |
+          git -C engine config user.name "fyf-nifty-bot"
+          git -C engine config user.email "bot@fundyourfreedom.in"
+
+      # 6. Fetch OHLCV — holiday check + NSE primary + fallback chain + snapshot write
+      - name: Run fetch_nifty.py
+        env:
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_KV_NAMESPACE_ID: ${{ secrets.CF_KV_NAMESPACE_ID }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          ALERT_WEBHOOK_URL: ${{ secrets.ALERT_WEBHOOK_URL }}
+          GH_PAT: ${{ secrets.GH_PAT }}
+        run: python engine/pipeline/fetch_nifty.py
+
+      # 7. Build analytics + assemble chart-data.json
+      - name: Run build_chart_data.py
+        run: python engine/pipeline/build_chart_data.py
+
+      # 8. Write chart-data.json to Cloudflare KV
+      - name: Run kv_writer.py
+        env:
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_KV_NAMESPACE_ID: ${{ secrets.CF_KV_NAMESPACE_ID }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+        run: python engine/pipeline/kv_writer.py
+
+      # 9. Commit new snapshot (and any acquired holiday files) back to engine repo
+      - name: Commit to engine repo
+        run: |
+          cd engine
+          git add data/snapshots/ pipeline/nse_holidays_*.json data/chart-data.json
+          # Only commit if there are staged changes
+          git diff --cached --quiet || git commit -m "nifty-bot: snapshot $(date +%Y-%m-%d) [skip ci]"
+          git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/HABSGconsulting/fyf-nifty-engine.git HEAD:main
+
+      # 10. Open a GitHub Issue on failure
+      - name: Alert on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GH_PAT }}
+          script: |
+            await github.rest.issues.create({
+              owner: 'HABSGconsulting',
+              repo: 'fyf-nifty-engine',
+              title: `[Engine] Pipeline failed — ${new Date().toISOString().slice(0,10)}`,
+              body: `## Daily pipeline failed\n\n**Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\n\nCheck the logs above for the failing step.`,
+              labels: ['bug']
+            })

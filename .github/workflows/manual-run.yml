@@ -1,0 +1,113 @@
+name: Manual Run
+
+# Force a single full pipeline run for today or a specific date.
+# Use this for:
+#   - Recovery after a failed scheduled run
+#   - Testing after a script change (use dry_run: true)
+#   - Running on a date when the cron was skipped
+
+on:
+  workflow_dispatch:
+    inputs:
+      force_date:
+        description: 'Override date (YYYY-MM-DD). Leave blank for today (IST).'
+        required: false
+        default: ''
+      dry_run:
+        description: 'Build JSON but skip KV write and Git commit'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
+      skip_holiday_check:
+        description: 'Force run even if date is a weekend or NSE holiday'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
+
+concurrency:
+  group: daily-engine
+  cancel-in-progress: false
+
+jobs:
+  run-pipeline:
+    name: Manual — Fetch → Build → Write KV
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+
+    steps:
+      - name: Checkout UI repo
+        uses: actions/checkout@v4
+
+      - name: Checkout engine repo
+        uses: actions/checkout@v4
+        with:
+          repository: HABSGconsulting/fyf-nifty-engine
+          token: ${{ secrets.GH_PAT }}
+          path: engine
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: engine/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r engine/requirements.txt
+
+      - name: Configure git
+        run: |
+          git -C engine config user.name "fyf-nifty-bot"
+          git -C engine config user.email "bot@fundyourfreedom.in"
+
+      - name: Run fetch_nifty.py
+        env:
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_KV_NAMESPACE_ID: ${{ secrets.CF_KV_NAMESPACE_ID }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          ALERT_WEBHOOK_URL: ${{ secrets.ALERT_WEBHOOK_URL }}
+          GH_PAT: ${{ secrets.GH_PAT }}
+          FORCE_DATE: ${{ github.event.inputs.force_date }}
+          SKIP_HOLIDAY_CHECK: ${{ github.event.inputs.skip_holiday_check }}
+        run: python engine/pipeline/fetch_nifty.py
+
+      - name: Run build_chart_data.py
+        run: python engine/pipeline/build_chart_data.py
+
+      - name: Run kv_writer.py
+        if: ${{ github.event.inputs.dry_run == 'false' }}
+        env:
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_KV_NAMESPACE_ID: ${{ secrets.CF_KV_NAMESPACE_ID }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+        run: python engine/pipeline/kv_writer.py
+
+      - name: Skip KV write (dry run)
+        if: ${{ github.event.inputs.dry_run == 'true' }}
+        run: echo "DRY RUN — KV write skipped. chart-data.json built successfully."
+
+      - name: Commit to engine repo
+        if: ${{ github.event.inputs.dry_run == 'false' }}
+        run: |
+          cd engine
+          git add data/snapshots/ pipeline/nse_holidays_*.json data/chart-data.json
+          git diff --cached --quiet || git commit -m "nifty-bot: manual snapshot $(date +%Y-%m-%d) [skip ci]"
+          git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/HABSGconsulting/fyf-nifty-engine.git HEAD:main
+
+      - name: Alert on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GH_PAT }}
+          script: |
+            await github.rest.issues.create({
+              owner: 'HABSGconsulting',
+              repo: 'fyf-nifty-engine',
+              title: `[Manual] Run failed — ${new Date().toISOString().slice(0,10)}`,
+              body: `## Manual pipeline failed\n\n**Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\n\nInputs:\n- force_date: ${{ github.event.inputs.force_date }}\n- dry_run: ${{ github.event.inputs.dry_run }}\n- skip_holiday_check: ${{ github.event.inputs.skip_holiday_check }}`,
+              labels: ['bug']
+            })
