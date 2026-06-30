@@ -54,15 +54,30 @@ jobs:
           git -C engine config user.name "fyf-nifty-bot"
           git -C engine config user.email "bot@fundyourfreedom.in"
 
-      - name: Run fetch_nifty.py (backfill mode)
+      - name: Run fetch_nifty.py for each date in range
         env:
           CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
           CF_KV_NAMESPACE_ID: ${{ secrets.CF_KV_NAMESPACE_ID }}
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
           GH_PAT: ${{ secrets.GH_PAT }}
-          BACKFILL_START: ${{ github.event.inputs.start_date }}
-          BACKFILL_END: ${{ github.event.inputs.end_date }}
-        run: python engine/pipeline/fetch_nifty.py --backfill
+        run: |
+          python - <<'EOF'
+          import subprocess, sys
+          from datetime import date, timedelta
+
+          start = date.fromisoformat("${{ github.event.inputs.start_date }}")
+          end   = date.fromisoformat("${{ github.event.inputs.end_date }}")
+          d = start
+          while d <= end:
+              print(f"--- Fetching {d} ---", flush=True)
+              result = subprocess.run(
+                  [sys.executable, "engine/pipeline/fetch_nifty.py", "--date", str(d)],
+                  check=False
+              )
+              if result.returncode not in (0, ):
+                  print(f"WARNING: fetch_nifty.py exited {result.returncode} for {d}", flush=True)
+              d += timedelta(days=1)
+          EOF
 
       - name: Run build_chart_data.py
         run: python engine/pipeline/build_chart_data.py
