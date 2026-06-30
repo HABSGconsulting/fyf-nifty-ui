@@ -1,30 +1,24 @@
-name: Backfill
+name: KV Sync
 
-# Populates data/snapshots/ for a historical date range.
-# Use on initial setup or to fill gaps in the snapshot archive.
-# Uses backfill_bulk.py which fetches the full range in ONE yfinance call —
-# avoids NSE CI blocks and yfinance per-request rate limiting.
-# Also writes chart-data.json to Cloudflare KV after building.
+# Rebuilds chart-data.json from existing snapshots and pushes to Cloudflare KV.
+# Use this when:
+#   - Backfill was run but KV was never updated (chart shows "Could not load data")
+#   - chart-data.json needs rebuilding without fetching new price data
+#   - Manual recovery after a failed KV write
 
 on:
   workflow_dispatch:
     inputs:
-      start_date:
-        description: 'Start date (YYYY-MM-DD, inclusive)'
-        required: true
-      end_date:
-        description: 'End date (YYYY-MM-DD, inclusive)'
-        required: true
       dry_run:
-        description: 'Build JSONs but skip Git commit and KV write'
+        description: 'Build chart-data.json but skip KV write'
         required: false
         default: 'false'
         type: choice
         options: ['false', 'true']
 
 jobs:
-  backfill:
-    name: Backfill ${{ github.event.inputs.start_date }} → ${{ github.event.inputs.end_date }}
+  kv-sync:
+    name: Build chart-data.json → Write KV
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -56,22 +50,6 @@ jobs:
           git -C engine config user.name "fyf-nifty-bot"
           git -C engine config user.email "bot@fundyourfreedom.in"
 
-      - name: Run backfill_bulk.py (single yfinance call)
-        env:
-          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
-          CF_KV_NAMESPACE_ID: ${{ secrets.CF_KV_NAMESPACE_ID }}
-          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
-          GH_PAT: ${{ secrets.GH_PAT }}
-        run: |
-          DRYRUN_FLAG=""
-          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
-            DRYRUN_FLAG="--dry-run"
-          fi
-          python engine/pipeline/backfill_bulk.py \
-            --start ${{ github.event.inputs.start_date }} \
-            --end   ${{ github.event.inputs.end_date }} \
-            $DRYRUN_FLAG
-
       - name: Run build_chart_data.py
         run: python engine/pipeline/build_chart_data.py
 
@@ -85,14 +63,14 @@ jobs:
 
       - name: Skip KV write (dry run)
         if: ${{ github.event.inputs.dry_run == 'true' }}
-        run: echo "DRY RUN — snapshots built, no commit or KV write made."
+        run: echo "DRY RUN — KV write skipped."
 
-      - name: Commit snapshots to engine repo
+      - name: Commit chart-data.json to engine repo
         if: ${{ github.event.inputs.dry_run == 'false' }}
         run: |
           cd engine
-          git add data/snapshots/ data/chart-data.json
-          git diff --cached --quiet || git commit -m "nifty-bot: backfill ${{ github.event.inputs.start_date }} to ${{ github.event.inputs.end_date }} [skip ci]"
+          git add data/chart-data.json
+          git diff --cached --quiet || git commit -m "nifty-bot: kv-sync $(date +%Y-%m-%d) [skip ci]"
           git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/HABSGconsulting/fyf-nifty-engine.git HEAD:main
 
       - name: Alert on failure
@@ -104,7 +82,7 @@ jobs:
             await github.rest.issues.create({
               owner: 'HABSGconsulting',
               repo: 'fyf-nifty-engine',
-              title: `[Backfill] Failed — ${{ github.event.inputs.start_date }} to ${{ github.event.inputs.end_date }}`,
-              body: `## Backfill failed\n\n**Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`,
+              title: `[KV Sync] Failed — ${new Date().toISOString().slice(0,10)}`,
+              body: `## KV Sync failed\n\n**Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`,
               labels: ['bug']
             })
