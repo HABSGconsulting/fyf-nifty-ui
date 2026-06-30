@@ -1,0 +1,23 @@
+# wrangler.toml — Cloudflare Pages project configuration
+# This file contains NO secrets. All bindings are configured in the
+# Cloudflare Pages dashboard under Settings > Functions > KV namespace bindings.
+
+name = "fyf-nifty-ui"
+pages_build_output_dir = "public"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+# KV namespace binding
+# In the Cloudflare Pages dashboard:
+#   Settings > Functions > KV namespace bindings
+#   Variable name: NIFTY_DATA
+#   KV namespace:  <select your nifty-chart-data namespace>
+#
+# For local dev with wrangler pages dev:
+#   Add to .dev.vars (gitignored):
+#     [[kv_namespaces]]
+#     binding = "NIFTY_DATA"
+#     id = "<your-namespace-id>"
+
+# Custom domain is configured in the Cloudflare Pages dashboard,
+# not in this file.
