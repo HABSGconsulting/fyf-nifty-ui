@@ -1,0 +1,893 @@
+/* ==========================================================================
+   NIFTY 50 Waterfall Chart — style.css
+   Art direction: Financial data tool → precise, dark, data-dense
+   Palette: Dark slate surfaces + green/red data accents
+   Typography: Satoshi (body) + Instrument Serif (display title only)
+   Density: Dense — this is a data dashboard, not an editorial page
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. DESIGN TOKENS
+   -------------------------------------------------------------------------- */
+
+:root {
+  /* Fonts */
+  --font-body:    'Satoshi', 'Inter', system-ui, sans-serif;
+  --font-display: 'Instrument Serif', Georgia, serif;
+
+  /* Type scale (fluid) */
+  --text-xs:   clamp(0.75rem,  0.7rem  + 0.25vw, 0.875rem);
+  --text-sm:   clamp(0.875rem, 0.8rem  + 0.35vw, 1rem);
+  --text-base: clamp(1rem,     0.95rem + 0.25vw, 1.125rem);
+  --text-lg:   clamp(1.125rem, 1rem    + 0.75vw, 1.5rem);
+  --text-xl:   clamp(1.5rem,   1.2rem  + 1.25vw, 2.25rem);
+
+  /* Spacing (4px base) */
+  --space-1:  0.25rem;
+  --space-2:  0.5rem;
+  --space-3:  0.75rem;
+  --space-4:  1rem;
+  --space-5:  1.25rem;
+  --space-6:  1.5rem;
+  --space-8:  2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+
+  /* Radius */
+  --radius-sm:   0.375rem;
+  --radius-md:   0.5rem;
+  --radius-lg:   0.75rem;
+  --radius-xl:   1rem;
+  --radius-full: 9999px;
+
+  /* Transitions */
+  --transition: 180ms cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Content widths */
+  --content-wide: 1280px;
+  --content-default: 960px;
+
+  /* Chart colours (spec-exact values) */
+  --chart-green:       #22c55e;
+  --chart-red:         #ef4444;
+  --chart-non-trading: #1e293b;
+  --chart-bridge:      #94a3b8;
+  --chart-grid:        #1e293b;
+  --chart-axis-label:  #64748b;
+
+  /* Weekday badge colours (from spec) */
+  --badge-mon-bg:  #dbeafe; --badge-mon-text:  #1e40af;
+  --badge-tue-bg:  #ede9fe; --badge-tue-text:  #5b21b6;
+  --badge-wed-bg:  #dcfce7; --badge-wed-text:  #166534;
+  --badge-thu-bg:  #fef9c3; --badge-thu-text:  #854d0e;
+  --badge-fri-bg:  #ffedd5; --badge-fri-text:  #9a3412;
+  --badge-sat-bg:  #f1f5f9; --badge-sat-text:  #475569;
+  --badge-sun-bg:  #f1f5f9; --badge-sun-text:  #475569;
+  --badge-hol-bg:  #fce7f3; --badge-hol-text:  #9d174d;
+}
+
+/* Dark theme (default — always dark for this product) */
+[data-theme="dark"], :root {
+  --color-bg:              #0f172a;
+  --color-surface:         #1e293b;
+  --color-surface-2:       #243044;
+  --color-surface-offset:  #162032;
+  --color-border:          #2d3f55;
+  --color-divider:         #1e2d3d;
+  --color-text:            #e2e8f0;
+  --color-text-muted:      #94a3b8;
+  --color-text-faint:      #475569;
+  --color-primary:         #22c55e;
+  --color-primary-hover:   #16a34a;
+  --color-danger:          #ef4444;
+  --color-warning:         #f59e0b;
+  --shadow-sm: 0 1px 3px oklch(0 0 0 / 0.3);
+  --shadow-md: 0 4px 12px oklch(0 0 0 / 0.4);
+  --shadow-lg: 0 12px 32px oklch(0 0 0 / 0.5);
+}
+
+/* --------------------------------------------------------------------------
+   2. BASE RESET
+   -------------------------------------------------------------------------- */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  scroll-behavior: smooth;
+  scroll-padding-top: var(--space-16);
+}
+
+body {
+  min-height: 100dvh;
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  color: var(--color-text);
+  background-color: var(--color-bg);
+  overflow-x: hidden;
+}
+
+img, svg { display: block; max-width: 100%; }
+button { cursor: pointer; background: none; border: none; font: inherit; color: inherit; }
+a { color: inherit; text-decoration: none; }
+ul, ol { list-style: none; }
+
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 3px;
+  border-radius: var(--radius-sm);
+}
+
+::selection {
+  background: oklch(from var(--color-primary) l c h / 0.25);
+  color: var(--color-text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Accessibility helpers */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0;
+  margin: -1px; overflow: hidden; clip: rect(0,0,0,0);
+  white-space: nowrap; border-width: 0;
+}
+.sr-only-focusable:focus {
+  position: static; width: auto; height: auto;
+  overflow: visible; clip: auto; white-space: normal;
+}
+
+/* --------------------------------------------------------------------------
+   3. SKELETON ANIMATION
+   -------------------------------------------------------------------------- */
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-surface) 25%,
+    var(--color-surface-2) 50%,
+    var(--color-surface) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: var(--radius-sm);
+  color: transparent !important;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* --------------------------------------------------------------------------
+   4. SITE HEADER
+   -------------------------------------------------------------------------- */
+
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--color-bg);
+  border-bottom: 1px solid var(--color-border);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  background: oklch(from var(--color-bg) l c h / 0.92);
+}
+
+.header-inner {
+  max-width: var(--content-wide);
+  margin-inline: auto;
+  padding: var(--space-3) var(--space-6);
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+/* Brand */
+.brand-link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  transition: opacity var(--transition);
+}
+.brand-link:hover { opacity: 0.75; }
+
+.brand-logo {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+}
+
+.brand-name {
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+/* Chart title */
+.header-title-group {
+  min-width: 0;
+}
+
+.chart-title {
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.title-accent {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+.chart-subtitle {
+  font-size: var(--text-xs);
+  color: var(--color-text-faint);
+  margin-top: var(--space-1);
+}
+
+/* Status badge */
+.header-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-1);
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--color-text-faint);
+  flex-shrink: 0;
+}
+
+.status-badge.live .status-dot {
+  background: var(--chart-green);
+  box-shadow: 0 0 6px oklch(from var(--chart-green) l c h / 0.6);
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+.status-badge.stale .status-dot { background: var(--color-warning); }
+.status-badge.error .status-dot { background: var(--color-danger); }
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.last-updated {
+  font-size: var(--text-xs);
+  color: var(--color-text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --------------------------------------------------------------------------
+   5. SUMMARY STATS — Row 1 (Component A)
+   -------------------------------------------------------------------------- */
+
+.summary-stats {
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.stats-inner {
+  max-width: var(--content-wide);
+  margin-inline: auto;
+  padding: var(--space-4) var(--space-6);
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-4);
+}
+
+.stat-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.stat-label {
+  font-size: var(--text-xs);
+  color: var(--color-text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 500;
+}
+
+.stat-value {
+  font-size: var(--text-xl);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  min-width: 120px;
+  min-height: 1.2em;
+}
+
+.stat-change {
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+
+.stat-change.gain { color: var(--chart-green); }
+.stat-change.loss { color: var(--chart-red); }
+.stat-change.neutral { color: var(--color-text-muted); }
+
+/* --------------------------------------------------------------------------
+   6. CHART SECTION — Rows 2–3
+   -------------------------------------------------------------------------- */
+
+.chart-section {
+  padding: var(--space-6) 0;
+}
+
+.chart-outer {
+  max-width: var(--content-wide);
+  margin-inline: auto;
+  padding-inline: var(--space-6);
+  position: relative;
+  min-height: 280px;
+}
+
+/* Error state */
+.chart-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: var(--space-16) var(--space-8);
+  gap: var(--space-3);
+  color: var(--color-text-muted);
+}
+
+.error-icon {
+  width: 40px;
+  height: 40px;
+  color: var(--color-text-faint);
+}
+
+.error-title {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.error-body {
+  font-size: var(--text-sm);
+  max-width: 36ch;
+}
+
+.btn-retry {
+  margin-top: var(--space-2);
+  padding: var(--space-2) var(--space-5);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-text);
+  transition: background var(--transition), border-color var(--transition);
+}
+.btn-retry:hover {
+  background: var(--color-surface);
+  border-color: var(--color-text-muted);
+}
+
+/* Skeleton bars */
+.chart-skeleton {
+  width: 100%;
+  height: 280px;
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  padding: var(--space-4) 0;
+}
+
+.skeleton-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  width: 100%;
+  height: 100%;
+}
+
+.skeleton-bar {
+  flex: 1;
+  background: linear-gradient(
+    90deg,
+    var(--color-surface) 25%,
+    var(--color-surface-2) 50%,
+    var(--color-surface) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  min-height: 8px;
+}
+
+.skeleton-bar.non-trading {
+  height: 100% !important;
+  background: var(--chart-non-trading);
+  animation: none;
+  opacity: 0.5;
+}
+
+/* Chart scroll wrapper — horizontal scroll on mobile */
+.chart-scroll-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+
+.chart-scroll-wrapper::-webkit-scrollbar {
+  height: 4px;
+}
+.chart-scroll-wrapper::-webkit-scrollbar-track {
+  background: transparent;
+}
+.chart-scroll-wrapper::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: var(--radius-full);
+}
+
+.chart-svg {
+  display: block;
+  min-width: 560px; /* prevents unreadable compression below 18px/col */
+  width: 100%;
+  height: 320px;
+  overflow: visible;
+}
+
+/* --------------------------------------------------------------------------
+   7. WEEKDAY WIN-RATE MATRIX — Row 4 (Component B)
+   -------------------------------------------------------------------------- */
+
+.analytics-section {
+  border-top: 1px solid var(--color-border);
+  padding: var(--space-6) 0;
+}
+
+.analytics-inner {
+  max-width: var(--content-wide);
+  margin-inline: auto;
+  padding-inline: var(--space-6);
+}
+
+.analytics-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-4);
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.analytics-title {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+/* Period toggle buttons */
+.period-toggle {
+  display: flex;
+  gap: var(--space-1);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 3px;
+}
+
+.period-btn {
+  padding: var(--space-1) var(--space-3);
+  border-radius: calc(var(--radius-lg) - 3px);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--color-text-muted);
+  transition: background var(--transition), color var(--transition);
+}
+
+.period-btn:hover:not(:disabled) {
+  background: var(--color-surface-2);
+  color: var(--color-text);
+}
+
+.period-btn.active {
+  background: var(--color-surface-2);
+  color: var(--color-text);
+}
+
+.period-btn.disabled,
+.period-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* Weekday matrix grid */
+.weekday-matrix {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.matrix-header,
+.matrix-row {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--space-2);
+}
+
+.matrix-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  font-variant-numeric: tabular-nums;
+}
+
+.header-cell {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-faint);
+  background: transparent;
+  padding-block: var(--space-1);
+}
+
+/* Weekday-specific badge colours on header cells */
+.header-cell[data-day="mon"] { color: var(--badge-mon-text); }
+.header-cell[data-day="tue"] { color: var(--badge-tue-text); }
+.header-cell[data-day="wed"] { color: var(--badge-wed-text); }
+.header-cell[data-day="thu"] { color: var(--badge-thu-text); }
+.header-cell[data-day="fri"] { color: var(--badge-fri-text); }
+
+.data-cell {
+  font-size: var(--text-base);
+  font-weight: 700;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  min-height: 52px;
+  transition: background var(--transition);
+}
+
+/* Win-rate colour fill: app.js adds these classes */
+.data-cell.high   { background: oklch(from var(--chart-green) l c h / 0.12); color: var(--chart-green); border-color: oklch(from var(--chart-green) l c h / 0.25); }
+.data-cell.mid    { background: var(--color-surface); color: var(--color-text); }
+.data-cell.low    { background: oklch(from var(--chart-red)   l c h / 0.12); color: var(--chart-red);   border-color: oklch(from var(--chart-red)   l c h / 0.25); }
+
+.subtext-cell {
+  font-size: var(--text-xs);
+  color: var(--color-text-faint);
+  font-variant-numeric: tabular-nums;
+  background: transparent;
+  border: none;
+  padding-block: var(--space-1);
+}
+
+/* --------------------------------------------------------------------------
+   8. ANALYTICS CARDS — Row 5
+   -------------------------------------------------------------------------- */
+
+.cards-section {
+  border-top: 1px solid var(--color-border);
+  padding: var(--space-6) 0 var(--space-10);
+}
+
+.cards-inner {
+  max-width: var(--content-wide);
+  margin-inline: auto;
+  padding-inline: var(--space-6);
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-4);
+}
+
+.analytics-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.card-title {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-faint);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.card-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.card-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.card-label {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.card-value {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  min-width: 60px;
+  min-height: 1em;
+}
+
+/* Coloured values — applied by app.js */
+.card-value.gain    { color: var(--chart-green); }
+.card-value.loss    { color: var(--chart-red); }
+.card-value.neutral { color: var(--color-text); }
+.card-value.warning { color: var(--color-warning); }
+
+/* --------------------------------------------------------------------------
+   9. TOOLTIP
+   -------------------------------------------------------------------------- */
+
+.chart-tooltip {
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3) var(--space-4);
+  box-shadow: var(--shadow-lg);
+  min-width: 160px;
+  max-width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.chart-tooltip:not([hidden]) {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* hidden attr: override display so transition still works */
+.chart-tooltip[hidden] {
+  display: flex !important;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.tooltip-date {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-text);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.tooltip-close {
+  font-size: var(--text-base);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+  letter-spacing: -0.01em;
+}
+
+.tooltip-change {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.tooltip-change.gain { color: var(--chart-green); }
+.tooltip-change.loss { color: var(--chart-red); }
+.tooltip-change.neutral { color: var(--color-text-muted); }
+
+/* --------------------------------------------------------------------------
+   10. FOOTER
+   -------------------------------------------------------------------------- */
+
+.site-footer {
+  border-top: 1px solid var(--color-border);
+  padding: var(--space-6) 0;
+  background: var(--color-surface);
+}
+
+.footer-inner {
+  max-width: var(--content-wide);
+  margin-inline: auto;
+  padding-inline: var(--space-6);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.footer-disclaimer {
+  font-size: var(--text-xs);
+  color: var(--color-text-faint);
+  max-width: 60ch;
+}
+
+.footer-links {
+  font-size: var(--text-xs);
+  color: var(--color-text-faint);
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.footer-links a {
+  color: var(--color-text-muted);
+  transition: color var(--transition);
+}
+.footer-links a:hover { color: var(--color-text); }
+
+/* --------------------------------------------------------------------------
+   11. RESPONSIVE — MOBILE FIRST
+   -------------------------------------------------------------------------- */
+
+/* Tablet: 768px */
+@media (max-width: 768px) {
+
+  .header-inner {
+    grid-template-columns: auto 1fr;
+    grid-template-rows: auto auto;
+    gap: var(--space-2) var(--space-4);
+    padding: var(--space-3) var(--space-4);
+  }
+
+  .header-meta {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .stats-inner {
+    padding-inline: var(--space-4);
+    gap: var(--space-3);
+  }
+
+  .stat-value {
+    font-size: var(--text-lg);
+  }
+
+  .chart-outer,
+  .analytics-inner,
+  .cards-inner {
+    padding-inline: var(--space-4);
+  }
+
+  /* Weekday matrix: compress slightly */
+  .matrix-cell {
+    padding: var(--space-2);
+  }
+
+  .data-cell {
+    font-size: var(--text-sm);
+    min-height: 44px;
+  }
+
+  /* Cards: 2 columns on tablet */
+  .cards-inner {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .footer-inner {
+    flex-direction: column;
+    align-items: flex-start;
+    padding-inline: var(--space-4);
+  }
+}
+
+/* Mobile: 480px */
+@media (max-width: 480px) {
+
+  /* Header: single column stack */
+  .header-inner {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
+  }
+
+  .brand-name { display: none; }
+
+  /* Stats: 3 columns still work at 480px with smaller values */
+  .stats-inner {
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-2);
+  }
+
+  .stat-value {
+    font-size: var(--text-lg);
+    min-width: unset;
+  }
+
+  /* Period toggle: full width */
+  .analytics-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  /* Weekday matrix: tight */
+  .matrix-header,
+  .matrix-row {
+    gap: var(--space-1);
+  }
+
+  .data-cell {
+    font-size: var(--text-xs);
+    padding: var(--space-2) var(--space-1);
+    min-height: 40px;
+  }
+
+  .subtext-cell {
+    font-size: 0.65rem;
+  }
+
+  /* Cards: single column on mobile */
+  .cards-inner {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Touch: remove hover states that don't apply */
+@media (hover: none) {
+  .brand-link:hover { opacity: 1; }
+  .btn-retry:hover { background: transparent; border-color: var(--color-border); }
+  .period-btn:hover { background: transparent; color: var(--color-text-muted); }
+  .footer-links a:hover { color: var(--color-text-muted); }
+}
