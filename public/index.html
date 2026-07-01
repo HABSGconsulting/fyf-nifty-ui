@@ -79,7 +79,7 @@
   ═══════════════════════════════════════════════ -->
   <main id="main-content">
 
-    <!-- ───────────────────────────────────────────────
+    <!-- ─────────────────────────────────────────────
          ROW 1: WINDOW SNAPSHOT — Component A
          stat-window-high, stat-window-low, stat-period-change
     ────────────────────────────────────────────── -->
@@ -106,7 +106,7 @@
       </div>
     </section>
 
-    <!-- ───────────────────────────────────────────────
+    <!-- ─────────────────────────────────────────────
          ROW 2–3: WATERFALL CHART
     ────────────────────────────────────────────── -->
     <section class="chart-section" aria-label="NIFTY 50 waterfall chart">
@@ -156,7 +156,7 @@
       </div>
     </section>
 
-    <!-- ───────────────────────────────────────────────
+    <!-- ─────────────────────────────────────────────
          ROW 4: MULTI-PERIOD RETURNS — card_row_2
          ret-1w, ret-2w, ret-1m, ret-3m, ret-6m, ret-1y, ret-ytd
     ────────────────────────────────────────────── -->
@@ -213,7 +213,7 @@
       </div>
     </section>
 
-    <!-- ───────────────────────────────────────────────
+    <!-- ─────────────────────────────────────────────
          ROW 5: WEEKDAY INTELLIGENCE — Component B
          wd-toggle-30d, wd-toggle-1y, wd-table-body, wd-warning
     ────────────────────────────────────────────── -->
@@ -257,7 +257,7 @@
       </div>
     </section>
 
-    <!-- ───────────────────────────────────────────────
+    <!-- ─────────────────────────────────────────────
          ROW 6: ANALYTICS CARDS
          Gap Analysis (card_row_4) + Volatility Regime (card_row_5)
     ────────────────────────────────────────────── -->
@@ -266,7 +266,10 @@
 
         <!-- Card: Gap Analysis (card_row_4) -->
         <article class="analytics-card" id="card-gap" aria-label="Gap analysis">
-          <h3 class="card-title">Gap Analysis</h3>
+          <div class="card-title-row">
+            <h3 class="card-title">Gap Analysis</h3>
+            <span class="card-period" id="gap-period"></span>
+          </div>
           <div class="card-body">
             <div class="card-row">
               <span class="card-label">Post-Weekend avg</span>
@@ -293,7 +296,10 @@
 
         <!-- Card: Volatility Regime (card_row_5) -->
         <article class="analytics-card" id="card-volatility" aria-label="Volatility regime">
-          <h3 class="card-title">Volatility Regime</h3>
+          <div class="card-title-row">
+            <h3 class="card-title">Volatility Regime</h3>
+            <span class="card-period" id="vol-period"></span>
+          </div>
           <div class="card-body">
 
             <!-- Regime summary row -->
@@ -304,23 +310,23 @@
             <p class="vol-regime-copy skeleton" id="vol-regime-copy"></p>
 
             <div class="card-row">
-              <span class="card-label">Avg daily swing</span>
+              <span class="card-label" id="vol-avg-swing-label">Avg daily swing</span>
               <span class="card-value skeleton" id="vol-avg-swing">—</span>
             </div>
             <div class="card-row">
-              <span class="card-label">1Y norm swing</span>
+              <span class="card-label" id="vol-1y-norm-label">1Y norm swing</span>
               <span class="card-value skeleton" id="vol-1y-norm">—</span>
             </div>
             <div class="card-row">
-              <span class="card-label">High-vol days</span>
+              <span class="card-label" id="vol-high-days-label">High-vol days</span>
               <span class="card-value skeleton" id="vol-high-days">—</span>
             </div>
             <div class="card-row">
-              <span class="card-label">Calm days</span>
+              <span class="card-label" id="vol-calm-days-label">Calm days</span>
               <span class="card-value skeleton" id="vol-calm-days">—</span>
             </div>
             <div class="card-row">
-              <span class="card-label">Period drawdown</span>
+              <span class="card-label" id="vol-drawdown-label">Period drawdown</span>
               <span class="card-value skeleton" id="vol-drawdown">—</span>
             </div>
           </div>
