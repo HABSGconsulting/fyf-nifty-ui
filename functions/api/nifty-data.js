@@ -4,11 +4,11 @@
  * Reads the latest chart-data.json payload from KV and returns it
  * as a JSON response with appropriate CORS and cache headers.
  *
- * KV binding: NIFTY_DATA (configured in Cloudflare Pages dashboard)
- * KV key:     nifty-chart-data
+ * KV binding: NIFTY_CHART_DATA  (configured in Cloudflare Pages dashboard)
+ * KV key:     chart-data        (written by kv_writer.py)
  */
 
-const KV_KEY = 'nifty-chart-data';
+const KV_KEY = 'chart-data';
 
 // Cache for 5 minutes on the CDN edge — balances freshness vs. load
 const CACHE_MAX_AGE = 300;
@@ -33,8 +33,8 @@ export async function onRequest(context) {
   }
 
   // KV binding must exist
-  if (!env.NIFTY_DATA) {
-    console.error('KV binding NIFTY_DATA is not configured');
+  if (!env.NIFTY_CHART_DATA) {
+    console.error('KV binding NIFTY_CHART_DATA is not configured');
     return new Response(
       JSON.stringify({ error: 'Data source not configured', code: 'KV_MISSING' }),
       { status: 503, headers: { 'Content-Type': 'application/json', ...corsHeaders() } }
@@ -44,7 +44,7 @@ export async function onRequest(context) {
   // Read from KV
   let raw;
   try {
-    raw = await env.NIFTY_DATA.get(KV_KEY, { type: 'text' });
+    raw = await env.NIFTY_CHART_DATA.get(KV_KEY, { type: 'text' });
   } catch (err) {
     console.error('KV read error:', err);
     return new Response(
