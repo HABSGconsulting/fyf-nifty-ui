@@ -1,12 +1,13 @@
 /**
  * app.js — NIFTY 50 Waterfall Chart
- * Fetches chart-data.json from Cloudflare Worker (KV),
+ * Fetches chart-data.json from Cloudflare Pages Function (KV),
  * renders SVG waterfall, populates all analytics panels.
  *
- * Depends on:
- *   - d3-scale v4  (window.d3 via CDN, or d3Scale)
- *   - d3-array v3  (window.d3 via CDN, or d3Array)
+ * Schema contract: fyf-nifty-engine/docs/05-json-schema.md (v1.1)
+ * UI spec:         fyf-nifty-engine/docs/09-ui-chart-spec.md
+ * Analytics spec:  fyf-nifty-engine/docs/08-analytics-cards-spec.md
  *
+ * Depends on: D3 v7 (window.d3 via CDN — scale math only)
  * No localStorage. No external state. Pure in-memory.
  */
 
@@ -18,36 +19,45 @@
   ───────────────────────────────────────────────────────────── */
 
   const CFG = {
-    // Cloudflare Pages Function endpoint — serves chart-data from KV
-    dataUrl: '/api/nifty-data',
-
-    // Fallback for local dev / pre-worker testing
+    dataUrl:     '/api/nifty-data',
     fallbackUrl: './chart-data.json',
 
-    // How stale (ms) before badge turns yellow
     staleThresholdMs: 26 * 60 * 60 * 1000, // 26 hours
 
-    // Chart layout
     chart: {
       marginTop:    24,
       marginRight:  8,
       marginBottom: 32,
       marginLeft:   52,
-      barGap:       3,    // px gap between bars
-      bridgeStroke: 1.5,  // connector line width
+      barWidthRatio: 0.55,  // bar width = column_width * 0.55 (per doc 09)
+      bridgeStroke: 1,
       cornerRadius: 2,
+      minBarHeight: 2,      // px — prevents zero-height bars on flat sessions
     },
 
-    // Colour tokens (mirror CSS vars for SVG which can't use vars directly)
     colours: {
       green:      '#22c55e',
       red:        '#ef4444',
+      flat:       '#94a3b8',
       nonTrading: '#1e293b',
       bridge:     '#94a3b8',
       grid:       '#1e293b',
       axisLabel:  '#64748b',
+      nonTradingLabel: '#475569',
       greenAlpha: 'rgba(34,197,94,0.15)',
       redAlpha:   'rgba(239,68,68,0.15)',
+    },
+
+    // Weekday badge colours per doc 09
+    weekdayBadge: {
+      Monday:    { bg: '#dbeafe', text: '#1e40af' },
+      Tuesday:   { bg: '#ede9fe', text: '#5b21b6' },
+      Wednesday: { bg: '#dcfce7', text: '#166534' },
+      Thursday:  { bg: '#fef9c3', text: '#854d0e' },
+      Friday:    { bg: '#ffedd5', text: '#9a3412' },
+      Saturday:  { bg: '#f1f5f9', text: '#475569' },
+      Sunday:    { bg: '#f1f5f9', text: '#475569' },
+      nse_holiday: { bg: '#fce7f3', text: '#9d174d' },
     },
   };
 
@@ -58,17 +68,10 @@
   const $ = id => document.getElementById(id);
 
   const DOM = {
+    // Header
     statusBadge:   $('status-badge'),
     statusText:    $('status-text'),
     lastUpdated:   $('last-updated'),
-
-    // Summary stats
-    closeVal:      $('stat-close-value'),
-    closeChg:      $('stat-close-change'),
-    monthVal:      $('stat-month-value'),
-    monthChg:      $('stat-month-change'),
-    athVal:        $('stat-ath-value'),
-    athChg:        $('stat-ath-change'),
 
     // Chart
     chartSkeleton: $('chart-skeleton'),
@@ -85,40 +88,50 @@
     tooltipClose:  $('tooltip-close'),
     tooltipChange: $('tooltip-change'),
 
-    // Weekday matrix
-    wrMon: $('wr-mon'), wrTue: $('wr-tue'), wrWed: $('wr-wed'),
-    wrThu: $('wr-thu'), wrFri: $('wr-fri'),
-    wcMon: $('wc-mon'), wcTue: $('wc-tue'), wcWed: $('wc-wed'),
-    wcThu: $('wc-thu'), wcFri: $('wc-fri'),
+    // Card Row 1 — Window Snapshot (analytics.component_a)
+    windowHigh:      $('stat-window-high'),
+    windowHighDate:  $('stat-window-high-date'),
+    windowLow:       $('stat-window-low'),
+    windowLowDate:   $('stat-window-low-date'),
+    periodChange:    $('stat-period-change'),
 
-    // Analytics cards
-    gapUpDays:     $('gap-up-days'),
-    gapDownDays:   $('gap-down-days'),
-    gapUpAvg:      $('gap-up-avg'),
-    gapDownAvg:    $('gap-down-avg'),
+    // Card Row 2 — Multi-Period Returns (analytics.card_row_2)
+    ret1w:   $('ret-1w'),   ret2w:   $('ret-2w'),
+    ret1m:   $('ret-1m'),   ret3m:   $('ret-3m'),
+    ret6m:   $('ret-6m'),   ret1y:   $('ret-1y'),
+    retYtd:  $('ret-ytd'),
 
-    volRegime:     $('vol-regime'),
-    volAvgMove:    $('vol-avg-move'),
-    volLargestGain: $('vol-largest-gain'),
-    volLargestLoss: $('vol-largest-loss'),
+    // Card Row 3 — Weekday Intelligence (analytics.component_b)
+    wdToggle30d: $('wd-toggle-30d'),
+    wdToggle1y:  $('wd-toggle-1y'),
+    wdTableBody: $('wd-table-body'),
+    wdWarning:   $('wd-warning'),
 
-    momSma20:      $('mom-sma20'),
-    momSma50:      $('mom-sma50'),
-    momRsi14:      $('mom-rsi14'),
-    momVsSma20:    $('mom-vs-sma20'),
+    // Card Row 4 — Gap Analysis (analytics.card_row_4)
+    gapPostWeekend:  $('gap-post-weekend'),
+    gapPostHoliday:  $('gap-post-holiday'),
+    gapGreenStreak:  $('gap-green-streak'),
+    gapRedStreak:    $('gap-red-streak'),
+    gapAboveMean:    $('gap-above-mean'),
 
-    streakCurrent: $('streak-current'),
-    streakWin:     $('streak-win'),
-    streakLoss:    $('streak-loss'),
-    streakWinrate: $('streak-winrate'),
+    // Card Row 5 — Volatility Regime (analytics.card_row_5)
+    volRegimeIcon:   $('vol-regime-icon'),
+    volRegimeHeader: $('vol-regime-header'),
+    volRegimeCopy:   $('vol-regime-copy'),
+    volAvgSwing:     $('vol-avg-swing'),
+    vol1yNorm:       $('vol-1y-norm'),
+    volHighDays:     $('vol-high-days'),
+    volCalmDays:     $('vol-calm-days'),
+    volDrawdown:     $('vol-drawdown'),
   };
 
   /* ─────────────────────────────────────────────────────────────
      STATE
   ───────────────────────────────────────────────────────────── */
 
-  let chartData = null;   // parsed JSON from KV
-  let retryCount = 0;
+  let chartData   = null;
+  let wdLookback  = '1y';   // active weekday tab
+  let retryCount  = 0;
   const MAX_RETRIES = 3;
 
   /* ─────────────────────────────────────────────────────────────
@@ -126,14 +139,27 @@
   ───────────────────────────────────────────────────────────── */
 
   function boot() {
-    DOM.retryBtn.addEventListener('click', () => {
-      retryCount = 0;
-      hideError();
-      showSkeleton();
-      loadData();
-    });
+    if (DOM.retryBtn) {
+      DOM.retryBtn.addEventListener('click', () => {
+        retryCount = 0;
+        hideError();
+        showSkeleton();
+        loadData();
+      });
+    }
+
+    // Weekday toggle listeners
+    if (DOM.wdToggle30d) DOM.wdToggle30d.addEventListener('click', () => setWdLookback('30d'));
+    if (DOM.wdToggle1y)  DOM.wdToggle1y.addEventListener('click',  () => setWdLookback('1y'));
 
     loadData();
+  }
+
+  function setWdLookback(key) {
+    wdLookback = key;
+    if (DOM.wdToggle30d) DOM.wdToggle30d.classList.toggle('active', key === '30d');
+    if (DOM.wdToggle1y)  DOM.wdToggle1y.classList.toggle('active',  key === '1y');
+    if (chartData) renderWeekdayMatrix(chartData);
   }
 
   /* ─────────────────────────────────────────────────────────────
@@ -167,14 +193,28 @@
       if (r.ok) return r;
       throw new Error(`primary ${r.status}`);
     } catch {
-      // Fall back to static file (local dev / pre-worker)
       return fetch(CFG.fallbackUrl, { cache: 'no-cache' });
     }
   }
 
   function validatePayload(d) {
-    if (!d || !Array.isArray(d.bars) || d.bars.length === 0) {
-      throw new Error('Invalid payload: missing bars array');
+    // Schema v1.1: top-level keys are meta, days, bridges, analytics
+    if (!d || !Array.isArray(d.days) || d.days.length === 0) {
+      throw new Error('Invalid payload: missing days array');
+    }
+    const version = d.meta && d.meta.schema_version;
+    if (version && version !== '1.1') {
+      console.warn(`[fyf-nifty] unexpected schema version: ${version}`);
+      // Show banner but do not hard-fail
+      showSchemaBanner(version);
+    }
+  }
+
+  function showSchemaBanner(version) {
+    const banner = $('schema-banner');
+    if (banner) {
+      banner.textContent = 'Chart update in progress — please refresh shortly.';
+      banner.removeAttribute('hidden');
     }
   }
 
@@ -185,10 +225,12 @@
   function render(d) {
     hideSkeleton();
     updateStatus(d);
-    renderSummaryStats(d);
     renderChart(d);
+    renderCardRow1(d);
+    renderCardRow2(d);
     renderWeekdayMatrix(d);
-    renderAnalyticsCards(d);
+    renderCardRow4(d);
+    renderCardRow5(d);
   }
 
   /* ─────────────────────────────────────────────────────────────
@@ -196,141 +238,90 @@
   ───────────────────────────────────────────────────────────── */
 
   function updateStatus(d) {
-    const generatedAt = d.meta && d.meta.generated_at
-      ? new Date(d.meta.generated_at)
-      : null;
+    // Schema v1.1: d.meta.last_updated
+    const raw = d.meta && d.meta.last_updated;
+    const generatedAt = raw ? new Date(raw) : null;
 
     if (!generatedAt || isNaN(generatedAt)) {
       setStatus('neutral', 'Unknown');
-      DOM.lastUpdated.textContent = '—';
+      if (DOM.lastUpdated) DOM.lastUpdated.textContent = '—';
       return;
     }
 
-    const ageMs = Date.now() - generatedAt.getTime();
+    const ageMs   = Date.now() - generatedAt.getTime();
     const isStale = ageMs > CFG.staleThresholdMs;
+    setStatus(isStale ? 'stale' : 'live', isStale ? 'Stale' : 'Live');
 
-    if (isStale) {
-      setStatus('stale', 'Stale');
-    } else {
-      setStatus('live', 'Live');
-    }
-
-    DOM.lastUpdated.textContent = formatDatetime(generatedAt);
+    if (DOM.lastUpdated) DOM.lastUpdated.textContent = formatDatetime(generatedAt);
   }
 
   function setStatus(type, label) {
-    DOM.statusBadge.className = `status-badge ${type}`;
-    DOM.statusText.textContent = label;
+    if (DOM.statusBadge) DOM.statusBadge.className = `status-badge ${type}`;
+    if (DOM.statusText)  DOM.statusText.textContent = label;
   }
 
   /* ─────────────────────────────────────────────────────────────
-     SUMMARY STATS (Component A)
-  ───────────────────────────────────────────────────────────── */
-
-  function renderSummaryStats(d) {
-    const summary = d.summary || {};
-
-    // Today's close
-    const close = summary.latest_close;
-    if (close != null) {
-      setText(DOM.closeVal, formatPrice(close), false);
-      const chgPct = summary.day_change_pct;
-      if (chgPct != null) {
-        setChange(DOM.closeChg, chgPct, `${sign(chgPct)}${Math.abs(chgPct).toFixed(2)}%`);
-      }
-    } else {
-      setText(DOM.closeVal, 'N/A', false);
-    }
-
-    // Month so far
-    const monthPct = summary.month_change_pct;
-    if (monthPct != null) {
-      setText(DOM.monthVal, `${sign(monthPct)}${Math.abs(monthPct).toFixed(2)}%`, false);
-      setChange(DOM.monthChg, monthPct, summary.month_label || '');
-    } else {
-      setText(DOM.monthVal, 'N/A', false);
-    }
-
-    // From ATH
-    const athPct = summary.from_ath_pct;
-    if (athPct != null) {
-      setText(DOM.athVal, `${sign(athPct)}${Math.abs(athPct).toFixed(2)}%`, false);
-      const athVal = summary.all_time_high;
-      if (athVal != null) {
-        DOM.athChg.textContent = `ATH ${formatPrice(athVal)}`;
-        DOM.athChg.className = 'stat-change neutral';
-      }
-    } else {
-      setText(DOM.athVal, 'N/A', false);
-    }
-  }
-
-  /* ─────────────────────────────────────────────────────────────
-     WATERFALL CHART
+     WATERFALL CHART  (doc 09)
   ───────────────────────────────────────────────────────────── */
 
   function renderChart(d) {
-    const bars = d.bars;
-    if (!bars || bars.length === 0) return;
+    const days = d.days;
+    if (!days || days.length === 0) return;
 
     const svg = DOM.chartSvg;
-    svg.innerHTML = '';  // clear previous
+    if (!svg) return;
+    svg.innerHTML = '';
 
-    // ── Dimensions ──
-    const wrapper    = DOM.scrollWrapper;
-    const totalW     = Math.max(wrapper.clientWidth || 900, bars.length * 22);
-    const totalH     = 320;
+    // ── Dimensions ──────────────────────────────────────────────
+    const wrapper = DOM.scrollWrapper;
+    const totalW  = Math.max(wrapper ? wrapper.clientWidth : 900, days.length * 22);
+    const totalH  = 320;
     const { marginTop: mT, marginRight: mR, marginBottom: mB, marginLeft: mL } = CFG.chart;
-    const innerW     = totalW - mL - mR;
-    const innerH     = totalH - mT - mB;
+    const innerW  = totalW - mL - mR;
+    const innerH  = totalH - mT - mB;
 
-    svg.setAttribute('width', totalW);
-    svg.setAttribute('height', totalH);
+    svg.setAttribute('width',   totalW);
+    svg.setAttribute('height',  totalH);
     svg.setAttribute('viewBox', `0 0 ${totalW} ${totalH}`);
 
-    // ── Scales ──
-    // x: band scale over bar indices
-    const xScale = d3.scaleBand()
-      .domain(bars.map((_, i) => i))
-      .range([mL, mL + innerW])
-      .padding(CFG.chart.barGap / (innerW / bars.length));
+    // ── Scales ──────────────────────────────────────────────────
+    // Column width = chart_width / number_of_days (per doc 09)
+    const colW = innerW / days.length;
 
-    // y: linear over price range (for trading bars) + zero line
-    const tradingBars = bars.filter(b => b.type === 'trading');
-    const allValues   = tradingBars.flatMap(b => [b.open, b.close]).filter(v => v != null);
+    // Y scale: domain from analytics.component_a window_low/high
+    // with 0.5% padding per doc 09 spec
+    const compA    = (d.analytics && d.analytics.component_a) || {};
+    const tradingDays = days.filter(b => b.type === 'trading');
+    const yDomainMin = compA.window_low  ? compA.window_low.value  * 0.995
+                     : d3.min(tradingDays, b => b.bar_base);
+    const yDomainMax = compA.window_high ? compA.window_high.value * 1.005
+                     : d3.max(tradingDays, b => b.bar_top);
 
-    if (allValues.length === 0) return;
-
-    const yMin = d3.min(allValues);
-    const yMax = d3.max(allValues);
-    const yPad = (yMax - yMin) * 0.08;  // 8% padding
+    if (yDomainMin == null || yDomainMax == null) return;
 
     const yScale = d3.scaleLinear()
-      .domain([yMin - yPad, yMax + yPad])
+      .domain([yDomainMin, yDomainMax])
       .range([mT + innerH, mT]);
 
-    // ── Groups ──
+    // ── Root group ──────────────────────────────────────────────
     const g = svgEl('g', {});
     svg.appendChild(g);
 
-    // ── Grid lines ──
-    const ticks = yScale.ticks(5);
+    // ── Grid lines (5–7 lines per doc 09) ───────────────────────
+    const ticks = yScale.ticks(6);
     ticks.forEach(tick => {
-      const y = yScale(tick);
       g.appendChild(svgEl('line', {
-        x1: mL, x2: mL + innerW, y1: y, y2: y,
+        x1: mL, x2: mL + innerW, y1: yScale(tick), y2: yScale(tick),
         stroke: CFG.colours.grid,
         'stroke-width': 1,
-        'stroke-dasharray': '4 3',
+        opacity: 0.5,
       }));
     });
 
-    // ── Y Axis labels ──
+    // ── Y-axis labels ────────────────────────────────────────────
     ticks.forEach(tick => {
-      const y = yScale(tick);
       const t = svgEl('text', {
-        x: mL - 6,
-        y: y,
+        x: mL - 6, y: yScale(tick),
         'dominant-baseline': 'middle',
         'text-anchor': 'end',
         fill: CFG.colours.axisLabel,
@@ -342,31 +333,31 @@
       g.appendChild(t);
     });
 
-    // ── Bars ──
-    bars.forEach((bar, i) => {
-      const bx = xScale(i);
-      const bw = xScale.bandwidth();
-      const cx = bx + bw / 2;  // column centre (for x-axis label)
+    // ── Columns ─────────────────────────────────────────────────
+    days.forEach((day, i) => {
+      const bx = mL + i * colW;
+      const cx = bx + colW / 2;
 
-      if (bar.type === 'non-trading') {
-        // Non-trading column: full-height dim block
+      if (day.type !== 'trading') {
+        // Non-trading column: full-height dark block
         g.appendChild(svgEl('rect', {
           x: bx, y: mT,
-          width: bw, height: innerH,
+          width: colW, height: innerH,
           fill: CFG.colours.nonTrading,
-          rx: CFG.chart.cornerRadius,
-          'data-index': i,
-          'data-type': 'non-trading',
         }));
-        // Weekend/holiday label inside block
-        const label = bar.day_type === 'holiday' ? '★' : bar.label || '';
+
+        // Centred label: SAT / SUN / holiday short name
+        const label = day.type === 'nse_holiday'
+          ? (day.holiday_name ? day.holiday_name.substring(0, 8) : 'HOL')
+          : (day.weekday_short || '');
+
         if (label) {
           const lt = svgEl('text', {
             x: cx, y: mT + innerH / 2,
             'text-anchor': 'middle',
             'dominant-baseline': 'middle',
-            fill: CFG.colours.axisLabel,
-            'font-size': '10',
+            fill: CFG.colours.nonTradingLabel,
+            'font-size': '9',
             'font-family': 'Satoshi, system-ui, sans-serif',
             'writing-mode': 'vertical-rl',
             'text-orientation': 'mixed',
@@ -374,100 +365,133 @@
           lt.textContent = label;
           g.appendChild(lt);
         }
+
       } else {
-        // Trading bar
-        const yOpen  = yScale(bar.open);
-        const yClose = yScale(bar.close);
-        const isGain = bar.close >= bar.open;
+        // Trading column
+        // bar_base = min(close, prev_close), bar_top = max(close, prev_close) — from schema
+        const yBase = yScale(day.bar_base);
+        const yTop  = yScale(day.bar_top);
+        const barW  = colW * CFG.chart.barWidthRatio;
+        const barX  = bx + (colW - barW) / 2;
+        const barH  = Math.max(Math.abs(yBase - yTop), CFG.chart.minBarHeight);
+        const barY  = Math.min(yBase, yTop);
 
-        const barY = isGain ? yClose : yOpen;
-        const barH = Math.max(Math.abs(yOpen - yClose), 2);  // min 2px
+        const isGain  = day.direction === 'gain';
+        const isFlat  = day.direction === 'flat';
+        const fill    = isFlat ? CFG.colours.flat : isGain ? CFG.colours.green : CFG.colours.red;
+        const fillBg  = isGain ? CFG.colours.greenAlpha : isFlat ? 'transparent' : CFG.colours.redAlpha;
 
-        const fill    = isGain ? CFG.colours.green : CFG.colours.red;
-        const fillBg  = isGain ? CFG.colours.greenAlpha : CFG.colours.redAlpha;
-
-        // Background fill (full column, very light)
-        g.appendChild(svgEl('rect', {
-          x: bx, y: mT,
-          width: bw, height: innerH,
-          fill: fillBg,
-          rx: CFG.chart.cornerRadius,
-        }));
-
-        // Main bar
-        const rect = svgEl('rect', {
-          x: bx, y: barY,
-          width: bw, height: barH,
-          fill: fill,
-          rx: CFG.chart.cornerRadius,
-          'data-index': i,
-          'data-type': 'trading',
-          style: 'cursor:pointer',
-          role: 'presentation',
-          'aria-hidden': 'true',
-        });
-        g.appendChild(rect);
-
-        // Bridge line to next trading bar (connector)
-        const next = findNextTrading(bars, i);
-        if (next) {
-          const nBx = xScale(next.index);
-          const nBw = xScale.bandwidth();
-          const yC  = yScale(bar.close);
-          g.appendChild(svgEl('line', {
-            x1: bx + bw, x2: nBx,
-            y1: yC, y2: yC,
-            stroke: CFG.colours.bridge,
-            'stroke-width': CFG.chart.bridgeStroke,
-            'stroke-dasharray': '3 3',
-            'pointer-events': 'none',
+        // Column background tint
+        if (fillBg !== 'transparent') {
+          g.appendChild(svgEl('rect', {
+            x: bx, y: mT, width: colW, height: innerH,
+            fill: fillBg,
           }));
         }
 
-        // Hover interaction
-        attachTooltip(rect, bar);
+        // Main bar
+        const rect = svgEl('rect', {
+          x: barX, y: barY,
+          width: barW, height: barH,
+          fill: fill,
+          opacity: 0.85,
+          rx: CFG.chart.cornerRadius,
+          style: 'cursor:pointer',
+        });
+        g.appendChild(rect);
+
+        // Invisible full-height hit area for tooltip (per doc 09 spec)
+        const hitArea = svgEl('rect', {
+          x: bx, y: mT, width: colW, height: innerH,
+          fill: 'transparent',
+          style: 'cursor:pointer',
+        });
+        attachTooltip(hitArea, day);
+        g.appendChild(hitArea);
       }
 
-      // X Axis date label
-      const dateLbl = formatBarDate(bar.date);
-      const textEl  = svgEl('text', {
-        x: cx, y: mT + innerH + 16,
+      // ── X-axis weekday badge ───────────────────────────────────
+      // Use day.type === 'nse_holiday' badge if applicable, else weekday
+      const badgeKey = day.type === 'nse_holiday' ? 'nse_holiday' : (day.weekday || '');
+      const badge    = CFG.weekdayBadge[badgeKey] || { bg: '#1e293b', text: '#64748b' };
+      const labelTxt = formatBarDate(day.date);
+
+      const badgeRect = svgEl('rect', {
+        x: bx + 1, y: mT + innerH + 4,
+        width: colW - 2, height: 16,
+        fill: badge.bg,
+        rx: 3,
+      });
+      g.appendChild(badgeRect);
+
+      const badgeText = svgEl('text', {
+        x: cx, y: mT + innerH + 12,
         'text-anchor': 'middle',
-        fill: CFG.colours.axisLabel,
-        'font-size': '10',
+        'dominant-baseline': 'middle',
+        fill: badge.text,
+        'font-size': '9',
         'font-family': 'Satoshi, system-ui, sans-serif',
         'font-variant-numeric': 'tabular-nums',
       });
-      textEl.textContent = dateLbl;
-      g.appendChild(textEl);
+      badgeText.textContent = labelTxt;
+      g.appendChild(badgeText);
     });
+
+    // ── Bridge connector lines (from bridges[] array) ────────────
+    // per doc 09: dashed horizontal at bridge_y across non-trading band
+    if (Array.isArray(d.bridges)) {
+      d.bridges.forEach(bridge => {
+        const startIdx = days.findIndex(day => day.date === bridge.start_date);
+        const endIdx   = days.findIndex(day => day.date === bridge.end_date);
+        if (startIdx < 0 || endIdx < 0) return;
+
+        // x1 = right edge of column before the band
+        // x2 = left edge of column after the band
+        const x1 = mL + startIdx * colW;
+        const x2 = mL + (endIdx + 1) * colW;
+        const y  = yScale(bridge.bridge_y);
+
+        g.appendChild(svgEl('line', {
+          x1, x2, y1: y, y2: y,
+          stroke: CFG.colours.bridge,
+          'stroke-width': CFG.chart.bridgeStroke,
+          'stroke-dasharray': '4,4',
+          'pointer-events': 'none',
+        }));
+      });
+    }
   }
 
   /* ─────────────────────────────────────────────────────────────
-     TOOLTIP
+     TOOLTIP  (doc 09)
   ───────────────────────────────────────────────────────────── */
 
-  function attachTooltip(el, bar) {
-    el.addEventListener('mouseenter', e => showTooltip(e, bar));
+  function attachTooltip(el, day) {
+    el.addEventListener('mouseenter', e => showTooltip(e, day));
     el.addEventListener('mousemove',  e => moveTooltip(e));
     el.addEventListener('mouseleave', hideTooltip);
-    // Touch support
     el.addEventListener('touchstart', e => {
       e.preventDefault();
-      showTooltip(e.touches[0], bar);
+      showTooltip(e.touches[0], day);
     }, { passive: false });
     el.addEventListener('touchend', hideTooltip);
   }
 
-  function showTooltip(e, bar) {
-    const isGain = bar.close >= bar.open;
-    const chgPct = bar.change_pct != null ? bar.change_pct : safePct(bar.open, bar.close);
-    const chgAbs = bar.change_abs != null ? bar.change_abs : (bar.close - bar.open);
+  function showTooltip(e, day) {
+    if (!DOM.tooltip) return;
 
-    DOM.tooltipDate.textContent   = formatTooltipDate(bar.date);
-    DOM.tooltipClose.textContent  = formatPrice(bar.close);
-    DOM.tooltipChange.textContent = `${sign(chgAbs)}${Math.abs(chgAbs).toFixed(1)} pts  (${sign(chgPct)}${Math.abs(chgPct).toFixed(2)}%)`;
-    DOM.tooltipChange.className   = `tooltip-change ${isGain ? 'gain' : 'loss'}`;
+    if (DOM.tooltipDate)  DOM.tooltipDate.textContent  = formatTooltipDate(day.date, day.weekday);
+    if (DOM.tooltipClose) DOM.tooltipClose.textContent = `Close: ${formatPrice(day.close)}`;
+
+    if (DOM.tooltipChange) {
+      const pts = day.close - day.prev_close;
+      const pct = day.pct_change;
+      const arrow = day.direction === 'gain' ? '▲' : day.direction === 'loss' ? '▼' : '→';
+      DOM.tooltipChange.textContent =
+        `${arrow} ${sign(pts)}${Math.abs(pts).toFixed(2)} pts (${sign(pct)}${Math.abs(pct).toFixed(2)}%)`;
+      DOM.tooltipChange.className =
+        `tooltip-change ${day.direction === 'gain' ? 'gain' : day.direction === 'loss' ? 'loss' : 'neutral'}`;
+    }
 
     DOM.tooltip.removeAttribute('hidden');
     moveTooltip(e);
@@ -475,139 +499,212 @@
 
   function moveTooltip(e) {
     const t  = DOM.tooltip;
+    if (!t) return;
     const vw = window.innerWidth;
-    const vh = window.innerHeight;
     const tw = t.offsetWidth  || 200;
     const th = t.offsetHeight || 80;
-
     let x = e.clientX + 14;
     let y = e.clientY - th - 8;
-
     if (x + tw > vw - 8) x = e.clientX - tw - 14;
     if (y < 8) y = e.clientY + 20;
-
     t.style.left = `${x}px`;
     t.style.top  = `${y}px`;
   }
 
   function hideTooltip() {
-    DOM.tooltip.setAttribute('hidden', '');
+    if (DOM.tooltip) DOM.tooltip.setAttribute('hidden', '');
   }
 
   /* ─────────────────────────────────────────────────────────────
-     WEEKDAY WIN-RATE MATRIX (Component B)
+     CARD ROW 1 — Window Snapshot  (analytics.component_a)
   ───────────────────────────────────────────────────────────── */
 
-  function renderWeekdayMatrix(d) {
-    const wr = d.weekday_win_rates;
-    if (!wr) return;
+  function renderCardRow1(d) {
+    const a = d.analytics && d.analytics.component_a;
+    if (!a) return;
 
-    const days = [
-      { key: 'mon', wrEl: DOM.wrMon, wcEl: DOM.wcMon },
-      { key: 'tue', wrEl: DOM.wrTue, wcEl: DOM.wcTue },
-      { key: 'wed', wrEl: DOM.wrWed, wcEl: DOM.wcWed },
-      { key: 'thu', wrEl: DOM.wrThu, wcEl: DOM.wcThu },
-      { key: 'fri', wrEl: DOM.wrFri, wcEl: DOM.wcFri },
-    ];
+    if (DOM.windowHigh && a.window_high) {
+      setText(DOM.windowHigh, formatPrice(a.window_high.value));
+      if (DOM.windowHighDate) setText(DOM.windowHighDate, fmtDate(a.window_high.date));
+    }
+    if (DOM.windowLow && a.window_low) {
+      setText(DOM.windowLow, formatPrice(a.window_low.value));
+      if (DOM.windowLowDate) setText(DOM.windowLowDate, fmtDate(a.window_low.date));
+    }
+    if (DOM.periodChange && a.net_change) {
+      const n = a.net_change;
+      const s = sign(n.points);
+      setText(DOM.periodChange,
+        `${s}${Math.abs(n.points).toFixed(2)} pts (${s}${Math.abs(n.pct).toFixed(2)}%)`);
+      setColour(DOM.periodChange, n.direction);
+    }
+  }
 
-    days.forEach(({ key, wrEl, wcEl }) => {
-      const data = wr[key];
-      if (!data) return;
+  /* ─────────────────────────────────────────────────────────────
+     CARD ROW 2 — Multi-Period Returns  (analytics.card_row_2)
+  ───────────────────────────────────────────────────────────── */
 
-      const rate = data.win_rate;
-      const wins = data.wins;
-      const total = data.total;
+  function renderCardRow2(d) {
+    const r = d.analytics && d.analytics.card_row_2;
+    if (!r) return;
 
-      wrEl.classList.remove('skeleton');
+    const map = {
+      '1w': DOM.ret1w, '2w': DOM.ret2w, '1m': DOM.ret1m,
+      '3m': DOM.ret3m, '6m': DOM.ret6m, '1y': DOM.ret1y,
+      'ytd': DOM.retYtd,
+    };
 
-      wrEl.textContent = rate != null ? `${Math.round(rate)}%` : '—';
-      wcEl.textContent = (wins != null && total != null) ? `${wins} / ${total}` : '— / —';
-
-      if (rate != null) {
-        wrEl.classList.remove('high', 'mid', 'low');
-        wrEl.classList.add(rate >= 60 ? 'high' : rate < 40 ? 'low' : 'mid');
-      }
+    Object.entries(map).forEach(([key, el]) => {
+      if (!el) return;
+      const data = r[key];
+      if (!data) { setText(el, 'N/A'); return; }
+      const s = sign(data.pct);
+      el.querySelector('.ret-pct') &&
+        (el.querySelector('.ret-pct').textContent = `${s}${Math.abs(data.pct).toFixed(2)}%`);
+      el.querySelector('.ret-pts') &&
+        (el.querySelector('.ret-pts').textContent = `${s}${Math.abs(data.points).toFixed(0)} pts`);
+      setColour(el, data.direction);
     });
   }
 
   /* ─────────────────────────────────────────────────────────────
-     ANALYTICS CARDS
+     CARD ROW 3 — Weekday Intelligence  (analytics.component_b)
   ───────────────────────────────────────────────────────────── */
 
-  function renderAnalyticsCards(d) {
-    const analytics = d.analytics || {};
+  const WEEKDAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday'];
 
-    const gap = analytics.gap || {};
-    setText(DOM.gapUpDays,   gap.gap_up_days   != null ? `${gap.gap_up_days} days`   : '—');
-    setText(DOM.gapDownDays, gap.gap_down_days != null ? `${gap.gap_down_days} days` : '—');
-    setText(DOM.gapUpAvg,    gap.avg_gap_up    != null ? `+${gap.avg_gap_up.toFixed(2)}%`  : '—');
-    setText(DOM.gapDownAvg,  gap.avg_gap_down  != null ? `${gap.avg_gap_down.toFixed(2)}%` : '—');
+  function renderWeekdayMatrix(d) {
+    const compB = d.analytics && d.analytics.component_b;
+    if (!compB || !DOM.wdTableBody) return;
 
-    setColour(DOM.gapUpAvg,   'gain');
-    setColour(DOM.gapDownAvg, 'loss');
+    const data = compB[wdLookback] || compB['1y'];
+    if (!data) return;
 
-    const vol = analytics.volatility || {};
-    setText(DOM.volRegime,      vol.regime || '—');
-    setText(DOM.volAvgMove,     vol.avg_daily_move != null ? `${vol.avg_daily_move.toFixed(2)}%` : '—');
-    setText(DOM.volLargestGain, vol.largest_gain   != null ? `+${vol.largest_gain.toFixed(2)}%` : '—');
-    setText(DOM.volLargestLoss, vol.largest_loss   != null ? `${vol.largest_loss.toFixed(2)}%`  : '—');
-
-    if (vol.regime) {
-      const r = vol.regime.toLowerCase();
-      setColour(DOM.volRegime, r.includes('low') ? 'gain' : r.includes('high') ? 'loss' : 'warning');
-    }
-    setColour(DOM.volLargestGain, 'gain');
-    setColour(DOM.volLargestLoss, 'loss');
-
-    const mom = analytics.momentum || {};
-    const latestClose = d.summary && d.summary.latest_close;
-
-    setText(DOM.momSma20, mom.sma_20 != null ? formatPrice(mom.sma_20) : '—');
-    setText(DOM.momSma50, mom.sma_50 != null ? formatPrice(mom.sma_50) : '—');
-
-    if (mom.rsi_14 != null) {
-      setText(DOM.momRsi14, mom.rsi_14.toFixed(1));
-      setColour(DOM.momRsi14, mom.rsi_14 >= 70 ? 'loss' : mom.rsi_14 <= 30 ? 'gain' : 'neutral');
-    } else {
-      setText(DOM.momRsi14, '—');
+    // Warning badge: only on 30d view
+    if (DOM.wdWarning) {
+      DOM.wdWarning.hidden = (wdLookback !== '30d');
     }
 
-    if (mom.sma_20 != null && latestClose != null) {
-      const diff = ((latestClose - mom.sma_20) / mom.sma_20) * 100;
-      setText(DOM.momVsSma20, `${sign(diff)}${Math.abs(diff).toFixed(2)}%`);
-      setColour(DOM.momVsSma20, diff >= 0 ? 'gain' : 'loss');
-    } else {
-      setText(DOM.momVsSma20, '—');
+    DOM.wdTableBody.innerHTML = '';
+
+    WEEKDAYS.forEach(wd => {
+      const row = data[wd];
+      const tr  = document.createElement('tr');
+
+      if (!row || row.suppressed) {
+        tr.innerHTML = `
+          <td>${wd.substring(0,3)}</td>
+          <td colspan="6" class="suppressed">
+            ⛔ Insufficient data (${row ? row.total_sessions : 0} sessions) — stat suppressed
+          </td>`;
+      } else {
+        const dev = row.deviation_from_1y;
+        const devTxt = (wdLookback === '30d' && dev != null)
+          ? `${sign(dev)}${Math.abs(dev).toFixed(2)}%` : '—';
+        const avgClass = row.avg_pct_change > 0 ? 'gain' : row.avg_pct_change < 0 ? 'loss' : 'neutral';
+
+        tr.innerHTML = `
+          <td>${wd.substring(0,3)}</td>
+          <td>${row.total_sessions}</td>
+          <td class="gain">${row.positive_sessions}</td>
+          <td class="loss">${row.negative_sessions}</td>
+          <td class="${avgClass}">${sign(row.avg_pct_change)}${Math.abs(row.avg_pct_change).toFixed(2)}%</td>
+          <td class="gain">${row.best_session  ? `+${row.best_session.value.toFixed(2)}%`  : '—'}</td>
+          <td class="loss">${row.worst_session ? `${row.worst_session.value.toFixed(2)}%` : '—'}</td>
+          <td class="${dev != null ? (dev >= 0 ? 'gain' : 'loss') : ''}">${devTxt}</td>`;
+
+        // Divergence signal: |deviation| > 0.20 on 30d view
+        if (wdLookback === '30d' && dev != null && Math.abs(dev) > 0.20) {
+          const signal = document.createElement('tr');
+          const ratio  = row.avg_pct_change !== 0 && (data[wd] || {})
+            ? (Math.abs(row.avg_pct_change / (row.avg_pct_change - dev))).toFixed(1)
+            : '—';
+          signal.innerHTML = `
+            <td colspan="8" class="divergence-signal">
+              📊 ${wd}'s current ${sign(row.avg_pct_change)}${row.avg_pct_change.toFixed(2)}%
+              is ${ratio}× vs its 1-year avg of
+              ${sign(row.avg_pct_change - dev)}${Math.abs(row.avg_pct_change - dev).toFixed(2)}%.
+              Likely driven by a recent macro event — treat with caution.
+            </td>`;
+          DOM.wdTableBody.appendChild(tr);
+          DOM.wdTableBody.appendChild(signal);
+          return;
+        }
+      }
+      DOM.wdTableBody.appendChild(tr);
+    });
+  }
+
+  /* ─────────────────────────────────────────────────────────────
+     CARD ROW 4 — Gap Analysis  (analytics.card_row_4)
+  ───────────────────────────────────────────────────────────── */
+
+  function renderCardRow4(d) {
+    const r = d.analytics && d.analytics.card_row_4;
+    if (!r) return;
+
+    if (DOM.gapPostWeekend) {
+      setText(DOM.gapPostWeekend,
+        r.post_weekend_avg_pct != null ? `${sign(r.post_weekend_avg_pct)}${Math.abs(r.post_weekend_avg_pct).toFixed(2)}%` : '—');
+      setColour(DOM.gapPostWeekend, r.post_weekend_avg_pct >= 0 ? 'gain' : 'loss');
     }
-
-    if (mom.sma_20 != null && latestClose != null) {
-      setColour(DOM.momSma20, latestClose >= mom.sma_20 ? 'gain' : 'loss');
+    if (DOM.gapPostHoliday) {
+      setText(DOM.gapPostHoliday,
+        r.post_holiday_avg_pct != null ? `${sign(r.post_holiday_avg_pct)}${Math.abs(r.post_holiday_avg_pct).toFixed(2)}%` : '—');
+      setColour(DOM.gapPostHoliday, r.post_holiday_avg_pct >= 0 ? 'gain' : 'loss');
     }
-    if (mom.sma_50 != null && latestClose != null) {
-      setColour(DOM.momSma50, latestClose >= mom.sma_50 ? 'gain' : 'loss');
+    if (DOM.gapGreenStreak && r.longest_green_streak) {
+      const gs = r.longest_green_streak;
+      setText(DOM.gapGreenStreak,
+        `${gs.sessions} sessions (${fmtDate(gs.start_date)}–${fmtDate(gs.end_date)})`);
+      setColour(DOM.gapGreenStreak, 'gain');
     }
-
-    const st = analytics.streaks || {};
-
-    if (st.current_streak != null && st.current_type) {
-      const label = `${Math.abs(st.current_streak)}${st.current_type === 'win' ? 'W' : 'L'}`;
-      setText(DOM.streakCurrent, label);
-      setColour(DOM.streakCurrent, st.current_type === 'win' ? 'gain' : 'loss');
-    } else {
-      setText(DOM.streakCurrent, '—');
+    if (DOM.gapRedStreak && r.longest_red_streak) {
+      const rs = r.longest_red_streak;
+      setText(DOM.gapRedStreak,
+        `${rs.sessions} sessions (${fmtDate(rs.start_date)}–${fmtDate(rs.end_date)})`);
+      setColour(DOM.gapRedStreak, 'loss');
     }
+    if (DOM.gapAboveMean) {
+      setText(DOM.gapAboveMean,
+        r.pct_days_above_30d_avg != null ? `${r.pct_days_above_30d_avg}% of trading days` : '—');
+    }
+  }
 
-    setText(DOM.streakWin,  st.longest_win_streak  != null ? `${st.longest_win_streak} days`  : '—');
-    setText(DOM.streakLoss, st.longest_loss_streak != null ? `${st.longest_loss_streak} days` : '—');
+  /* ─────────────────────────────────────────────────────────────
+     CARD ROW 5 — Volatility Regime  (analytics.card_row_5)
+  ───────────────────────────────────────────────────────────── */
 
-    setColour(DOM.streakWin,  'gain');
-    setColour(DOM.streakLoss, 'loss');
+  const REGIME_ICONS  = { calm: '🟢', elevated: '🟡', high_volatility: '🔴' };
+  const REGIME_CLASS  = { calm: 'gain', elevated: 'warning', high_volatility: 'loss' };
 
-    if (st.win_rate_30d != null) {
-      setText(DOM.streakWinrate, `${Math.round(st.win_rate_30d)}%`);
-      setColour(DOM.streakWinrate, st.win_rate_30d >= 50 ? 'gain' : 'loss');
-    } else {
-      setText(DOM.streakWinrate, '—');
+  function renderCardRow5(d) {
+    const r = d.analytics && d.analytics.card_row_5;
+    if (!r) return;
+
+    if (DOM.volRegimeIcon)   DOM.volRegimeIcon.textContent   = REGIME_ICONS[r.regime] || '⚪';
+    if (DOM.volRegimeHeader) {
+      setText(DOM.volRegimeHeader, r.regime_label || r.regime || '—');
+      setColour(DOM.volRegimeHeader, REGIME_CLASS[r.regime] || 'neutral');
+    }
+    if (DOM.volRegimeCopy) setText(DOM.volRegimeCopy, r.regime_copy || '');
+
+    if (DOM.volAvgSwing) {
+      setText(DOM.volAvgSwing,
+        r.avg_daily_swing_pts != null
+          ? `${formatPrice(r.avg_daily_swing_pts)} pts (${r.avg_daily_swing_pct}%)` : '—');
+    }
+    if (DOM.vol1yNorm) {
+      setText(DOM.vol1yNorm,
+        r.norm_1y_swing_pts != null ? `${formatPrice(r.norm_1y_swing_pts)} pts` : '—');
+    }
+    if (DOM.volHighDays)  setText(DOM.volHighDays,  r.high_vol_days != null ? `${r.high_vol_days}` : '—');
+    if (DOM.volCalmDays)  setText(DOM.volCalmDays,  r.calm_days     != null ? `${r.calm_days}`     : '—');
+    if (DOM.volDrawdown && r.intra_period_drawdown) {
+      const dd = r.intra_period_drawdown;
+      setText(DOM.volDrawdown,
+        `${sign(dd.pct)}${Math.abs(dd.pct).toFixed(2)}% (${sign(dd.points)}${Math.abs(dd.points).toFixed(0)} pts)`);
+      setColour(DOM.volDrawdown, 'loss');
     }
   }
 
@@ -616,49 +713,45 @@
   ───────────────────────────────────────────────────────────── */
 
   function showSkeleton() {
-    DOM.chartSkeleton.removeAttribute('hidden');
-    DOM.chartSvg.style.display = 'none';
+    if (DOM.chartSkeleton) DOM.chartSkeleton.removeAttribute('hidden');
+    if (DOM.chartSvg)      DOM.chartSvg.style.display = 'none';
   }
 
   function hideSkeleton() {
-    DOM.chartSkeleton.setAttribute('hidden', '');
-    DOM.chartSkeleton.style.display = 'none';
-    DOM.chartSvg.style.display = '';
+    if (DOM.chartSkeleton) {
+      DOM.chartSkeleton.setAttribute('hidden', '');
+      DOM.chartSkeleton.style.display = 'none';
+    }
+    if (DOM.chartSvg) DOM.chartSvg.style.display = '';
   }
 
   function showError(title, body) {
     hideSkeleton();
-    DOM.errorTitle.textContent = title || 'Error';
-    DOM.errorBody.textContent  = body  || 'An unexpected error occurred.';
-    DOM.chartError.removeAttribute('hidden');
-    DOM.chartSvg.style.display = 'none';
+    if (DOM.errorTitle) DOM.errorTitle.textContent = title || 'Error';
+    if (DOM.errorBody)  DOM.errorBody.textContent  = body  || 'An unexpected error occurred.';
+    if (DOM.chartError) DOM.chartError.removeAttribute('hidden');
+    if (DOM.chartSvg)   DOM.chartSvg.style.display = 'none';
     setStatus('error', 'Error');
   }
 
   function hideError() {
-    DOM.chartError.setAttribute('hidden', '');
+    if (DOM.chartError) DOM.chartError.setAttribute('hidden', '');
   }
 
   /* ─────────────────────────────────────────────────────────────
      DOM HELPERS
   ───────────────────────────────────────────────────────────── */
 
-  function setText(el, value, keepSkeleton) {
+  function setText(el, value) {
     if (!el) return;
     el.textContent = value;
-    if (!keepSkeleton) el.classList.remove('skeleton');
-  }
-
-  function setChange(el, numValue, label) {
-    if (!el) return;
-    el.textContent = label;
-    el.className = `stat-change ${numValue > 0 ? 'gain' : numValue < 0 ? 'loss' : 'neutral'}`;
+    el.classList.remove('skeleton');
   }
 
   function setColour(el, cls) {
     if (!el) return;
     el.classList.remove('gain', 'loss', 'neutral', 'warning');
-    el.classList.add(cls);
+    if (cls) el.classList.add(cls);
   }
 
   /* ─────────────────────────────────────────────────────────────
@@ -669,17 +762,6 @@
     const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
     Object.entries(attrs).forEach(([k, v]) => el.setAttribute(k, v));
     return el;
-  }
-
-  /* ─────────────────────────────────────────────────────────────
-     CHART UTILITIES
-  ───────────────────────────────────────────────────────────── */
-
-  function findNextTrading(bars, fromIndex) {
-    for (let i = fromIndex + 1; i < bars.length; i++) {
-      if (bars[i].type === 'trading') return { ...bars[i], index: i };
-    }
-    return null;
   }
 
   /* ─────────────────────────────────────────────────────────────
@@ -696,10 +778,7 @@
 
   function formatAxisPrice(v) {
     if (v == null) return '';
-    if (Math.abs(v) >= 1000) {
-      return (v / 1000).toFixed(1) + 'k';
-    }
-    return v.toFixed(0);
+    return Math.abs(v) >= 1000 ? (v / 1000).toFixed(1) + 'k' : v.toFixed(0);
   }
 
   function formatBarDate(dateStr) {
@@ -708,37 +787,36 @@
     return parts[2] ? parts[2].replace(/^0/, '') : '';
   }
 
-  function formatTooltipDate(dateStr) {
+  function fmtDate(dateStr) {
     if (!dateStr) return '';
     try {
-      const d = new Date(dateStr + 'T00:00:00');
-      return d.toLocaleDateString('en-IN', {
-        weekday: 'short', day: 'numeric', month: 'short',
+      const dt = new Date(dateStr + 'T00:00:00');
+      return dt.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+    } catch { return dateStr; }
+  }
+
+  function formatTooltipDate(dateStr, weekday) {
+    if (!dateStr) return '';
+    try {
+      const dt = new Date(dateStr + 'T00:00:00');
+      const base = dt.toLocaleDateString('en-IN', {
+        weekday: 'long', day: 'numeric', month: 'long',
       });
-    } catch {
-      return dateStr;
-    }
+      return base;
+    } catch { return dateStr; }
   }
 
   function formatDatetime(dt) {
     try {
       return dt.toLocaleString('en-IN', {
-        day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+        day: 'numeric', month: 'short',
+        hour: '2-digit', minute: '2-digit',
         timeZone: 'Asia/Kolkata',
       }) + ' IST';
-    } catch {
-      return dt.toISOString();
-    }
+    } catch { return dt.toISOString(); }
   }
 
-  function sign(v) {
-    return v > 0 ? '+' : '';
-  }
-
-  function safePct(open, close) {
-    if (!open) return 0;
-    return ((close - open) / open) * 100;
-  }
+  function sign(v) { return v > 0 ? '+' : ''; }
 
   /* ─────────────────────────────────────────────────────────────
      KICK OFF
