@@ -108,6 +108,7 @@
     wdWarning:   $('wd-warning'),
 
     // Card Row 4 — Gap Analysis (analytics.card_row_4)
+    gapPeriod:       $('gap-period'),
     gapPostWeekend:  $('gap-post-weekend'),
     gapPostHoliday:  $('gap-post-holiday'),
     gapGreenStreak:  $('gap-green-streak'),
@@ -115,6 +116,7 @@
     gapAboveMean:    $('gap-above-mean'),
 
     // Card Row 5 — Volatility Regime (analytics.card_row_5)
+    volPeriod:       $('vol-period'),
     volRegimeIcon:   $('vol-regime-icon'),
     volRegimeHeader: $('vol-regime-header'),
     volRegimeCopy:   $('vol-regime-copy'),
@@ -224,6 +226,7 @@
 
   function render(d) {
     hideSkeleton();
+    hideError(); // FIX: always dismiss any stale error overlay on successful load
     updateStatus(d);
     renderChart(d);
     renderCardRow1(d);
@@ -559,10 +562,18 @@
       const data = r[key];
       if (!data) { setText(el, 'N/A'); return; }
       const s = sign(data.pct);
-      el.querySelector('.ret-pct') &&
-        (el.querySelector('.ret-pct').textContent = `${s}${Math.abs(data.pct).toFixed(2)}%`);
-      el.querySelector('.ret-pts') &&
-        (el.querySelector('.ret-pts').textContent = `${s}${Math.abs(data.points).toFixed(0)} pts`);
+
+      // FIX: explicitly remove skeleton from inner spans and set text
+      const pctEl = el.querySelector('.ret-pct');
+      const ptsEl = el.querySelector('.ret-pts');
+      if (pctEl) {
+        pctEl.textContent = `${s}${Math.abs(data.pct).toFixed(2)}%`;
+        pctEl.classList.remove('skeleton');
+      }
+      if (ptsEl) {
+        ptsEl.textContent = `${s}${Math.abs(data.points).toFixed(0)} pts`;
+        ptsEl.classList.remove('skeleton');
+      }
       setColour(el, data.direction);
     });
   }
@@ -643,6 +654,13 @@
     const r = d.analytics && d.analytics.card_row_4;
     if (!r) return;
 
+    // Data period label
+    if (DOM.gapPeriod && d.meta) {
+      const start = d.meta.window_start ? fmtDate(d.meta.window_start) : null;
+      const end   = d.meta.window_end   ? fmtDate(d.meta.window_end)   : null;
+      if (start && end) setText(DOM.gapPeriod, `${start} – ${end}`);
+    }
+
     if (DOM.gapPostWeekend) {
       setText(DOM.gapPostWeekend,
         r.post_weekend_avg_pct != null ? `${sign(r.post_weekend_avg_pct)}${Math.abs(r.post_weekend_avg_pct).toFixed(2)}%` : '—');
@@ -653,16 +671,26 @@
         r.post_holiday_avg_pct != null ? `${sign(r.post_holiday_avg_pct)}${Math.abs(r.post_holiday_avg_pct).toFixed(2)}%` : '—');
       setColour(DOM.gapPostHoliday, r.post_holiday_avg_pct >= 0 ? 'gain' : 'loss');
     }
+
+    // FIX: include green/red day counts and date range on streaks
     if (DOM.gapGreenStreak && r.longest_green_streak) {
       const gs = r.longest_green_streak;
-      setText(DOM.gapGreenStreak,
-        `${gs.sessions} sessions (${fmtDate(gs.start_date)}–${fmtDate(gs.end_date)})`);
+      const totalTradingDays = d.days ? d.days.filter(x => x.type === 'trading').length : null;
+      const greenDays = d.days ? d.days.filter(x => x.type === 'trading' && x.direction === 'gain').length : null;
+      const greenPct  = (totalTradingDays && greenDays != null) ? Math.round(greenDays / totalTradingDays * 100) : null;
+      const streakTxt = `${gs.sessions} sessions (${fmtDate(gs.start_date)}–${fmtDate(gs.end_date)})`;
+      const daysTxt   = greenDays != null ? ` · ${greenDays} green days${greenPct != null ? ` (${greenPct}%)` : ''}` : '';
+      setText(DOM.gapGreenStreak, streakTxt + daysTxt);
       setColour(DOM.gapGreenStreak, 'gain');
     }
     if (DOM.gapRedStreak && r.longest_red_streak) {
       const rs = r.longest_red_streak;
-      setText(DOM.gapRedStreak,
-        `${rs.sessions} sessions (${fmtDate(rs.start_date)}–${fmtDate(rs.end_date)})`);
+      const totalTradingDays = d.days ? d.days.filter(x => x.type === 'trading').length : null;
+      const redDays  = d.days ? d.days.filter(x => x.type === 'trading' && x.direction === 'loss').length : null;
+      const redPct   = (totalTradingDays && redDays != null) ? Math.round(redDays / totalTradingDays * 100) : null;
+      const streakTxt = `${rs.sessions} sessions (${fmtDate(rs.start_date)}–${fmtDate(rs.end_date)})`;
+      const daysTxt   = redDays != null ? ` · ${redDays} red days${redPct != null ? ` (${redPct}%)` : ''}` : '';
+      setText(DOM.gapRedStreak, streakTxt + daysTxt);
       setColour(DOM.gapRedStreak, 'loss');
     }
     if (DOM.gapAboveMean) {
@@ -678,9 +706,25 @@
   const REGIME_ICONS  = { calm: '🟢', elevated: '🟡', high_volatility: '🔴' };
   const REGIME_CLASS  = { calm: 'gain', elevated: 'warning', high_volatility: 'loss' };
 
+  // Hover tooltip definitions for volatility metric labels
+  const VOL_TOOLTIPS = {
+    'vol-avg-swing-label':  'Average intraday range (high minus low close-to-close) across all trading sessions in the window.',
+    'vol-1y-norm-label':    'The 1-year historical average daily swing — used as a baseline to judge whether the current period is calm or volatile.',
+    'vol-high-days-label':  'Sessions where the day\'s swing exceeded 1.5× the 1-year norm. These are outlier moves that can distort intraday strategies.',
+    'vol-calm-days-label':  'Sessions where the day\'s swing was below 0.5× the 1-year norm. Low-activity days where range-based entries are less reliable.',
+    'vol-drawdown-label':   'The largest peak-to-trough decline within the 30-day window, measured on closing prices. Indicates worst-case short-term loss exposure.',
+  };
+
   function renderCardRow5(d) {
     const r = d.analytics && d.analytics.card_row_5;
     if (!r) return;
+
+    // Data period label
+    if (DOM.volPeriod && d.meta) {
+      const start = d.meta.window_start ? fmtDate(d.meta.window_start) : null;
+      const end   = d.meta.window_end   ? fmtDate(d.meta.window_end)   : null;
+      if (start && end) setText(DOM.volPeriod, `${start} – ${end}`);
+    }
 
     if (DOM.volRegimeIcon)   DOM.volRegimeIcon.textContent   = REGIME_ICONS[r.regime] || '⚪';
     if (DOM.volRegimeHeader) {
@@ -706,6 +750,12 @@
         `${sign(dd.pct)}${Math.abs(dd.pct).toFixed(2)}% (${sign(dd.points)}${Math.abs(dd.points).toFixed(0)} pts)`);
       setColour(DOM.volDrawdown, 'loss');
     }
+
+    // Attach hover title definitions to vol metric label elements
+    Object.entries(VOL_TOOLTIPS).forEach(([id, tip]) => {
+      const el = $(id);
+      if (el) el.title = tip;
+    });
   }
 
   /* ─────────────────────────────────────────────────────────────
