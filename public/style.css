@@ -174,7 +174,21 @@ ul, ol { list-style: none; }
 }
 
 /* --------------------------------------------------------------------------
-   4. SITE HEADER
+   4. SCHEMA VERSION BANNER
+   -------------------------------------------------------------------------- */
+
+.schema-banner {
+  background: oklch(from var(--color-warning) l c h / 0.12);
+  border-bottom: 1px solid oklch(from var(--color-warning) l c h / 0.3);
+  color: var(--color-warning);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  text-align: center;
+  padding: var(--space-2) var(--space-6);
+}
+
+/* --------------------------------------------------------------------------
+   5. SITE HEADER
    -------------------------------------------------------------------------- */
 
 .site-header {
@@ -294,7 +308,7 @@ ul, ol { list-style: none; }
 }
 
 /* --------------------------------------------------------------------------
-   5. SUMMARY STATS — Row 1 (Component A)
+   6. SUMMARY STATS — Row 1 (Component A)
    -------------------------------------------------------------------------- */
 
 .summary-stats {
@@ -335,18 +349,21 @@ ul, ol { list-style: none; }
   min-height: 1.2em;
 }
 
-.stat-change {
+/* Date subtitle under window high/low */
+.stat-date {
   font-size: var(--text-xs);
+  color: var(--color-text-faint);
   font-variant-numeric: tabular-nums;
-  font-weight: 500;
 }
 
-.stat-change.gain { color: var(--chart-green); }
-.stat-change.loss { color: var(--chart-red); }
-.stat-change.neutral { color: var(--color-text-muted); }
+.stat-change { font-size: var(--text-xs); font-variant-numeric: tabular-nums; font-weight: 500; }
+
+.stat-value.gain,  .stat-change.gain  { color: var(--chart-green); }
+.stat-value.loss,  .stat-change.loss  { color: var(--chart-red); }
+.stat-value.neutral, .stat-change.neutral { color: var(--color-text-muted); }
 
 /* --------------------------------------------------------------------------
-   6. CHART SECTION — Rows 2–3
+   7. CHART SECTION — Rows 2–3
    -------------------------------------------------------------------------- */
 
 .chart-section {
@@ -373,22 +390,9 @@ ul, ol { list-style: none; }
   color: var(--color-text-muted);
 }
 
-.error-icon {
-  width: 40px;
-  height: 40px;
-  color: var(--color-text-faint);
-}
-
-.error-title {
-  font-size: var(--text-base);
-  font-weight: 600;
-  color: var(--color-text);
-}
-
-.error-body {
-  font-size: var(--text-sm);
-  max-width: 36ch;
-}
+.error-icon { width: 40px; height: 40px; color: var(--color-text-faint); }
+.error-title { font-size: var(--text-base); font-weight: 600; color: var(--color-text); }
+.error-body  { font-size: var(--text-sm); max-width: 36ch; }
 
 .btn-retry {
   margin-top: var(--space-2);
@@ -444,7 +448,7 @@ ul, ol { list-style: none; }
   opacity: 0.5;
 }
 
-/* Chart scroll wrapper — horizontal scroll on mobile */
+/* Chart scroll wrapper */
 .chart-scroll-wrapper {
   width: 100%;
   overflow-x: auto;
@@ -454,12 +458,8 @@ ul, ol { list-style: none; }
   scrollbar-color: var(--color-border) transparent;
 }
 
-.chart-scroll-wrapper::-webkit-scrollbar {
-  height: 4px;
-}
-.chart-scroll-wrapper::-webkit-scrollbar-track {
-  background: transparent;
-}
+.chart-scroll-wrapper::-webkit-scrollbar { height: 4px; }
+.chart-scroll-wrapper::-webkit-scrollbar-track { background: transparent; }
 .chart-scroll-wrapper::-webkit-scrollbar-thumb {
   background: var(--color-border);
   border-radius: var(--radius-full);
@@ -467,14 +467,83 @@ ul, ol { list-style: none; }
 
 .chart-svg {
   display: block;
-  min-width: 560px; /* prevents unreadable compression below 18px/col */
+  min-width: 560px;
   width: 100%;
   height: 320px;
   overflow: visible;
 }
 
 /* --------------------------------------------------------------------------
-   7. WEEKDAY WIN-RATE MATRIX — Row 4 (Component B)
+   8. MULTI-PERIOD RETURNS — card_row_2
+   -------------------------------------------------------------------------- */
+
+.returns-section {
+  border-top: 1px solid var(--color-border);
+  padding: var(--space-6) 0;
+}
+
+.returns-inner {
+  max-width: var(--content-wide);
+  margin-inline: auto;
+  padding-inline: var(--space-6);
+}
+
+.section-title {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: var(--space-4);
+}
+
+.returns-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: var(--space-3);
+}
+
+.return-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  transition: border-color var(--transition);
+}
+
+.return-card:hover { border-color: var(--color-text-faint); }
+
+.ret-label {
+  font-size: var(--text-xs);
+  color: var(--color-text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 500;
+}
+
+.ret-pct {
+  font-size: var(--text-base);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  min-height: 1.2em;
+}
+
+.ret-pts {
+  font-size: var(--text-xs);
+  color: var(--color-text-faint);
+  font-variant-numeric: tabular-nums;
+  min-height: 1em;
+}
+
+.return-card.gain .ret-pct  { color: var(--chart-green); }
+.return-card.loss .ret-pct  { color: var(--chart-red); }
+.return-card.neutral .ret-pct { color: var(--color-text-muted); }
+
+/* --------------------------------------------------------------------------
+   9. WEEKDAY INTELLIGENCE — Component B
    -------------------------------------------------------------------------- */
 
 .analytics-section {
@@ -503,7 +572,7 @@ ul, ol { list-style: none; }
   color: var(--color-text);
 }
 
-/* Period toggle buttons */
+/* Period toggle */
 .period-toggle {
   display: flex;
   gap: var(--space-1);
@@ -538,72 +607,113 @@ ul, ol { list-style: none; }
   cursor: not-allowed;
 }
 
-/* Weekday matrix grid */
-.weekday-matrix {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-
-.matrix-header,
-.matrix-row {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: var(--space-2);
-}
-
-.matrix-cell {
+/* Low-sample warning */
+.wd-warning {
   display: flex;
   align-items: center;
-  justify-content: center;
-  text-align: center;
-  padding: var(--space-2) var(--space-3);
+  gap: var(--space-2);
+  background: oklch(from var(--color-warning) l c h / 0.08);
+  border: 1px solid oklch(from var(--color-warning) l c h / 0.25);
   border-radius: var(--radius-md);
+  color: var(--color-warning);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  padding: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+/* Weekday table */
+.weekday-table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+
+.weekday-table-wrapper::-webkit-scrollbar { height: 4px; }
+.weekday-table-wrapper::-webkit-scrollbar-track { background: transparent; }
+.weekday-table-wrapper::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: var(--radius-full);
+}
+
+.weekday-table {
+  width: 100%;
+  min-width: 580px;
+  border-collapse: collapse;
   font-variant-numeric: tabular-nums;
 }
 
-.header-cell {
+.weekday-table thead tr {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.weekday-table th {
   font-size: var(--text-xs);
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.07em;
   color: var(--color-text-faint);
-  background: transparent;
-  padding-block: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  text-align: right;
+  white-space: nowrap;
 }
 
-/* Weekday-specific badge colours on header cells */
-.header-cell[data-day="mon"] { color: var(--badge-mon-text); }
-.header-cell[data-day="tue"] { color: var(--badge-tue-text); }
-.header-cell[data-day="wed"] { color: var(--badge-wed-text); }
-.header-cell[data-day="thu"] { color: var(--badge-thu-text); }
-.header-cell[data-day="fri"] { color: var(--badge-fri-text); }
+.weekday-table th:first-child { text-align: left; }
+.weekday-table th.gain { color: var(--chart-green); }
+.weekday-table th.loss { color: var(--chart-red); }
 
-.data-cell {
-  font-size: var(--text-base);
-  font-weight: 700;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  min-height: 52px;
+.weekday-table tbody tr {
+  border-bottom: 1px solid var(--color-divider);
   transition: background var(--transition);
 }
 
-/* Win-rate colour fill: app.js adds these classes */
-.data-cell.high   { background: oklch(from var(--chart-green) l c h / 0.12); color: var(--chart-green); border-color: oklch(from var(--chart-green) l c h / 0.25); }
-.data-cell.mid    { background: var(--color-surface); color: var(--color-text); }
-.data-cell.low    { background: oklch(from var(--chart-red)   l c h / 0.12); color: var(--chart-red);   border-color: oklch(from var(--chart-red)   l c h / 0.25); }
+.weekday-table tbody tr:hover { background: var(--color-surface); }
+.weekday-table tbody tr:last-child { border-bottom: none; }
 
-.subtext-cell {
-  font-size: var(--text-xs);
+.weekday-table td {
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  padding: var(--space-3);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.weekday-table td:first-child {
+  text-align: left;
+  font-weight: 600;
+}
+
+.weekday-table td.gain { color: var(--chart-green); }
+.weekday-table td.loss { color: var(--chart-red); }
+
+.weekday-table td.suppressed {
   color: var(--color-text-faint);
-  font-variant-numeric: tabular-nums;
-  background: transparent;
-  border: none;
-  padding-block: var(--space-1);
+  font-style: italic;
+  font-size: var(--text-xs);
+  text-align: left;
+}
+
+.weekday-table td.divergence-signal {
+  font-size: var(--text-xs);
+  color: var(--color-warning);
+  background: oklch(from var(--color-warning) l c h / 0.06);
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+}
+
+.skeleton-row td,
+.skeleton-row {
+  color: var(--color-text-faint);
+  font-style: italic;
+  font-size: var(--text-xs);
+  text-align: center;
+  padding: var(--space-6);
 }
 
 /* --------------------------------------------------------------------------
-   8. ANALYTICS CARDS — Row 5
+   10. ANALYTICS CARDS — Gap + Volatility
    -------------------------------------------------------------------------- */
 
 .cards-section {
@@ -616,7 +726,7 @@ ul, ol { list-style: none; }
   margin-inline: auto;
   padding-inline: var(--space-6);
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: var(--space-4);
 }
 
@@ -668,14 +778,39 @@ ul, ol { list-style: none; }
   min-height: 1em;
 }
 
-/* Coloured values — applied by app.js */
 .card-value.gain    { color: var(--chart-green); }
 .card-value.loss    { color: var(--chart-red); }
 .card-value.neutral { color: var(--color-text); }
 .card-value.warning { color: var(--color-warning); }
 
+/* Volatility regime summary */
+.vol-regime-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--color-divider);
+  margin-bottom: var(--space-1);
+}
+
+.vol-regime-icon {
+  font-size: 1.1em;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.vol-regime-copy {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  line-height: 1.5;
+  margin-bottom: var(--space-2);
+  min-height: 1em;
+}
+
+.vol-regime-copy.skeleton { min-height: 2.5em; }
+
 /* --------------------------------------------------------------------------
-   9. TOOLTIP
+   11. TOOLTIP
    -------------------------------------------------------------------------- */
 
 .chart-tooltip {
@@ -697,12 +832,8 @@ ul, ol { list-style: none; }
   transition: opacity 120ms ease, transform 120ms ease;
 }
 
-.chart-tooltip:not([hidden]) {
-  opacity: 1;
-  transform: translateY(0);
-}
+.chart-tooltip:not([hidden]) { opacity: 1; transform: translateY(0); }
 
-/* hidden attr: override display so transition still works */
 .chart-tooltip[hidden] {
   display: flex !important;
   opacity: 0;
@@ -731,12 +862,12 @@ ul, ol { list-style: none; }
   font-variant-numeric: tabular-nums;
 }
 
-.tooltip-change.gain { color: var(--chart-green); }
-.tooltip-change.loss { color: var(--chart-red); }
+.tooltip-change.gain    { color: var(--chart-green); }
+.tooltip-change.loss    { color: var(--chart-red); }
 .tooltip-change.neutral { color: var(--color-text-muted); }
 
 /* --------------------------------------------------------------------------
-   10. FOOTER
+   12. FOOTER
    -------------------------------------------------------------------------- */
 
 .site-footer {
@@ -770,17 +901,21 @@ ul, ol { list-style: none; }
   align-items: center;
 }
 
-.footer-links a {
-  color: var(--color-text-muted);
-  transition: color var(--transition);
-}
+.footer-links a { color: var(--color-text-muted); transition: color var(--transition); }
 .footer-links a:hover { color: var(--color-text); }
 
+.footer-roadmap {
+  font-size: var(--text-xs);
+  color: var(--color-text-faint);
+  width: 100%;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-divider);
+}
+
 /* --------------------------------------------------------------------------
-   11. RESPONSIVE — MOBILE FIRST
+   13. RESPONSIVE
    -------------------------------------------------------------------------- */
 
-/* Tablet: 768px */
 @media (max-width: 768px) {
 
   .header-inner {
@@ -797,35 +932,16 @@ ul, ol { list-style: none; }
     align-items: center;
   }
 
-  .stats-inner {
-    padding-inline: var(--space-4);
-    gap: var(--space-3);
-  }
-
-  .stat-value {
-    font-size: var(--text-lg);
-  }
+  .stats-inner { padding-inline: var(--space-4); gap: var(--space-3); }
+  .stat-value  { font-size: var(--text-lg); }
 
   .chart-outer,
   .analytics-inner,
-  .cards-inner {
-    padding-inline: var(--space-4);
-  }
+  .returns-inner,
+  .cards-inner { padding-inline: var(--space-4); }
 
-  /* Weekday matrix: compress slightly */
-  .matrix-cell {
-    padding: var(--space-2);
-  }
-
-  .data-cell {
-    font-size: var(--text-sm);
-    min-height: 44px;
-  }
-
-  /* Cards: 2 columns on tablet */
-  .cards-inner {
-    grid-template-columns: repeat(2, 1fr);
-  }
+  .returns-grid { grid-template-columns: repeat(4, 1fr); }
+  .cards-inner  { grid-template-columns: 1fr; }
 
   .footer-inner {
     flex-direction: column;
@@ -834,10 +950,8 @@ ul, ol { list-style: none; }
   }
 }
 
-/* Mobile: 480px */
 @media (max-width: 480px) {
 
-  /* Header: single column stack */
   .header-inner {
     grid-template-columns: 1fr;
     grid-template-rows: auto auto auto;
@@ -845,49 +959,28 @@ ul, ol { list-style: none; }
 
   .brand-name { display: none; }
 
-  /* Stats: 3 columns still work at 480px with smaller values */
   .stats-inner {
     grid-template-columns: repeat(3, 1fr);
     gap: var(--space-2);
   }
 
-  .stat-value {
-    font-size: var(--text-lg);
-    min-width: unset;
-  }
+  .stat-value { font-size: var(--text-lg); min-width: unset; }
 
-  /* Period toggle: full width */
+  .returns-grid { grid-template-columns: repeat(2, 1fr); }
+
   .analytics-header {
     flex-direction: column;
     align-items: flex-start;
   }
 
-  /* Weekday matrix: tight */
-  .matrix-header,
-  .matrix-row {
-    gap: var(--space-1);
-  }
-
-  .data-cell {
-    font-size: var(--text-xs);
-    padding: var(--space-2) var(--space-1);
-    min-height: 40px;
-  }
-
-  .subtext-cell {
-    font-size: 0.65rem;
-  }
-
-  /* Cards: single column on mobile */
-  .cards-inner {
-    grid-template-columns: 1fr;
-  }
+  .cards-inner { grid-template-columns: 1fr; }
 }
 
-/* Touch: remove hover states that don't apply */
 @media (hover: none) {
-  .brand-link:hover { opacity: 1; }
-  .btn-retry:hover { background: transparent; border-color: var(--color-border); }
-  .period-btn:hover { background: transparent; color: var(--color-text-muted); }
+  .brand-link:hover   { opacity: 1; }
+  .btn-retry:hover    { background: transparent; border-color: var(--color-border); }
+  .period-btn:hover   { background: transparent; color: var(--color-text-muted); }
   .footer-links a:hover { color: var(--color-text-muted); }
+  .return-card:hover  { border-color: var(--color-border); }
+  .weekday-table tbody tr:hover { background: transparent; }
 }
