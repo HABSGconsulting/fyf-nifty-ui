@@ -18,8 +18,8 @@
   ───────────────────────────────────────────────────────────── */
 
   const CFG = {
-    // Cloudflare Worker endpoint — serves chart-data.json from KV
-    dataUrl: '/api/chart-data',
+    // Cloudflare Pages Function endpoint — serves chart-data from KV
+    dataUrl: '/api/nifty-data',
 
     // Fallback for local dev / pre-worker testing
     fallbackUrl: './chart-data.json',
@@ -514,18 +514,15 @@
       const data = wr[key];
       if (!data) return;
 
-      const rate = data.win_rate;   // 0–100 float
+      const rate = data.win_rate;
       const wins = data.wins;
       const total = data.total;
 
-      // Remove skeleton
       wrEl.classList.remove('skeleton');
 
-      // Set text
       wrEl.textContent = rate != null ? `${Math.round(rate)}%` : '—';
       wcEl.textContent = (wins != null && total != null) ? `${wins} / ${total}` : '— / —';
 
-      // Colour class: high ≥ 60%, low < 40%, else mid
       if (rate != null) {
         wrEl.classList.remove('high', 'mid', 'low');
         wrEl.classList.add(rate >= 60 ? 'high' : rate < 40 ? 'low' : 'mid');
@@ -540,7 +537,6 @@
   function renderAnalyticsCards(d) {
     const analytics = d.analytics || {};
 
-    // ── Gap Analysis ──
     const gap = analytics.gap || {};
     setText(DOM.gapUpDays,   gap.gap_up_days   != null ? `${gap.gap_up_days} days`   : '—');
     setText(DOM.gapDownDays, gap.gap_down_days != null ? `${gap.gap_down_days} days` : '—');
@@ -550,14 +546,12 @@
     setColour(DOM.gapUpAvg,   'gain');
     setColour(DOM.gapDownAvg, 'loss');
 
-    // ── Volatility Regime ──
     const vol = analytics.volatility || {};
     setText(DOM.volRegime,      vol.regime || '—');
     setText(DOM.volAvgMove,     vol.avg_daily_move != null ? `${vol.avg_daily_move.toFixed(2)}%` : '—');
     setText(DOM.volLargestGain, vol.largest_gain   != null ? `+${vol.largest_gain.toFixed(2)}%` : '—');
     setText(DOM.volLargestLoss, vol.largest_loss   != null ? `${vol.largest_loss.toFixed(2)}%`  : '—');
 
-    // Regime colour
     if (vol.regime) {
       const r = vol.regime.toLowerCase();
       setColour(DOM.volRegime, r.includes('low') ? 'gain' : r.includes('high') ? 'loss' : 'warning');
@@ -565,14 +559,12 @@
     setColour(DOM.volLargestGain, 'gain');
     setColour(DOM.volLargestLoss, 'loss');
 
-    // ── Momentum ──
     const mom = analytics.momentum || {};
     const latestClose = d.summary && d.summary.latest_close;
 
     setText(DOM.momSma20, mom.sma_20 != null ? formatPrice(mom.sma_20) : '—');
     setText(DOM.momSma50, mom.sma_50 != null ? formatPrice(mom.sma_50) : '—');
 
-    // RSI: green < 70, red > 70, warning > 30
     if (mom.rsi_14 != null) {
       setText(DOM.momRsi14, mom.rsi_14.toFixed(1));
       setColour(DOM.momRsi14, mom.rsi_14 >= 70 ? 'loss' : mom.rsi_14 <= 30 ? 'gain' : 'neutral');
@@ -580,7 +572,6 @@
       setText(DOM.momRsi14, '—');
     }
 
-    // vs SMA 20
     if (mom.sma_20 != null && latestClose != null) {
       const diff = ((latestClose - mom.sma_20) / mom.sma_20) * 100;
       setText(DOM.momVsSma20, `${sign(diff)}${Math.abs(diff).toFixed(2)}%`);
@@ -589,7 +580,6 @@
       setText(DOM.momVsSma20, '—');
     }
 
-    // SMA colours
     if (mom.sma_20 != null && latestClose != null) {
       setColour(DOM.momSma20, latestClose >= mom.sma_20 ? 'gain' : 'loss');
     }
@@ -597,10 +587,8 @@
       setColour(DOM.momSma50, latestClose >= mom.sma_50 ? 'gain' : 'loss');
     }
 
-    // ── Streaks ──
     const st = analytics.streaks || {};
 
-    // Current streak: "3W" or "2L"
     if (st.current_streak != null && st.current_type) {
       const label = `${Math.abs(st.current_streak)}${st.current_type === 'win' ? 'W' : 'L'}`;
       setText(DOM.streakCurrent, label);
@@ -708,7 +696,6 @@
 
   function formatAxisPrice(v) {
     if (v == null) return '';
-    // e.g. 24500 → "24.5k"
     if (Math.abs(v) >= 1000) {
       return (v / 1000).toFixed(1) + 'k';
     }
@@ -716,14 +703,12 @@
   }
 
   function formatBarDate(dateStr) {
-    // "2026-06-30" → "30" (just day number; compact for bar axis)
     if (!dateStr) return '';
     const parts = dateStr.split('-');
     return parts[2] ? parts[2].replace(/^0/, '') : '';
   }
 
   function formatTooltipDate(dateStr) {
-    // "2026-06-30" → "Mon, 30 Jun"
     if (!dateStr) return '';
     try {
       const d = new Date(dateStr + 'T00:00:00');
