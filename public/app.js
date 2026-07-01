@@ -627,14 +627,23 @@
         // Divergence signal: |deviation| > 0.20 on 30d view
         if (wdLookback === '30d' && dev != null && Math.abs(dev) > 0.20) {
           const signal = document.createElement('tr');
-          const ratio  = row.avg_pct_change !== 0 && (data[wd] || {})
-            ? (Math.abs(row.avg_pct_change / (row.avg_pct_change - dev))).toFixed(1)
+
+          // B-03 FIX: Correct divergence ratio calculation.
+          // The 1-year baseline avg for this weekday is:
+          //   yearly_avg = avg_pct_change - deviation_from_1y
+          // The ratio = current 30d avg / 1y avg, expressing how many
+          // times larger/smaller the current period is vs the 1-year norm.
+          // Previous formula `avg / (avg - dev)` was mathematically wrong.
+          const yearly_avg = row.avg_pct_change - dev;
+          const ratio = yearly_avg !== 0
+            ? Math.abs(row.avg_pct_change / yearly_avg).toFixed(1)
             : '—';
+
           signal.innerHTML = `
             <td colspan="8" class="divergence-signal">
               📊 ${wd}'s current ${sign(row.avg_pct_change)}${row.avg_pct_change.toFixed(2)}%
               is ${ratio}× vs its 1-year avg of
-              ${sign(row.avg_pct_change - dev)}${Math.abs(row.avg_pct_change - dev).toFixed(2)}%.
+              ${sign(yearly_avg)}${Math.abs(yearly_avg).toFixed(2)}%.
               Likely driven by a recent macro event — treat with caution.
             </td>`;
           DOM.wdTableBody.appendChild(tr);
