@@ -44,12 +44,11 @@
 
       <!-- Brand -->
       <a href="https://fundyourfreedom.in" class="brand-link" target="_blank" rel="noopener noreferrer" aria-label="Fund Your Freedom — home">
-        <!-- Inline SVG logo -->
         <svg class="brand-logo" viewBox="0 0 32 32" fill="none" aria-hidden="true" focusable="false">
-          <rect x="2" y="16" width="6" height="14" rx="1" fill="#22c55e" />
+          <rect x="2"  y="16" width="6" height="14" rx="1" fill="#22c55e" />
           <rect x="10" y="10" width="6" height="20" rx="1" fill="#22c55e" opacity="0.8" />
-          <rect x="18" y="4" width="6" height="26" rx="1" fill="#22c55e" opacity="0.6" />
-          <rect x="26" y="8" width="4" height="22" rx="1" fill="#ef4444" opacity="0.7" />
+          <rect x="18" y="4"  width="6" height="26" rx="1" fill="#22c55e" opacity="0.6" />
+          <rect x="26" y="8"  width="4" height="22" rx="1" fill="#ef4444" opacity="0.7" />
         </svg>
         <span class="brand-name">Fund Your Freedom</span>
       </a>
@@ -72,34 +71,36 @@
     </div>
   </header>
 
+  <!-- Schema version banner (hidden by default, shown on version mismatch) -->
+  <div id="schema-banner" class="schema-banner" hidden></div>
+
   <!-- ═══════════════════════════════════════════════
        MAIN CONTENT
   ═══════════════════════════════════════════════ -->
   <main id="main-content">
 
     <!-- ───────────────────────────────────────────────
-         ROW 1: SUMMARY STATS (Component A)
-         Three headline numbers above the chart
+         ROW 1: WINDOW SNAPSHOT — Component A
+         stat-window-high, stat-window-low, stat-period-change
     ────────────────────────────────────────────── -->
-    <section class="summary-stats" aria-label="Summary statistics">
+    <section class="summary-stats" aria-label="Period summary statistics">
       <div class="stats-inner">
 
-        <div class="stat-card" id="stat-close">
-          <span class="stat-label">Today's Close</span>
-          <span class="stat-value skeleton" id="stat-close-value" aria-live="polite">—</span>
-          <span class="stat-change" id="stat-close-change"></span>
+        <div class="stat-card" id="card-window-high">
+          <span class="stat-label">Window High</span>
+          <span class="stat-value skeleton" id="stat-window-high" aria-live="polite">—</span>
+          <span class="stat-date" id="stat-window-high-date"></span>
         </div>
 
-        <div class="stat-card" id="stat-month">
-          <span class="stat-label">Month so far</span>
-          <span class="stat-value skeleton" id="stat-month-value" aria-live="polite">—</span>
-          <span class="stat-change" id="stat-month-change"></span>
+        <div class="stat-card" id="card-window-low">
+          <span class="stat-label">Window Low</span>
+          <span class="stat-value skeleton" id="stat-window-low" aria-live="polite">—</span>
+          <span class="stat-date" id="stat-window-low-date"></span>
         </div>
 
-        <div class="stat-card" id="stat-ath">
-          <span class="stat-label">From ATH</span>
-          <span class="stat-value skeleton" id="stat-ath-value" aria-live="polite">—</span>
-          <span class="stat-change" id="stat-ath-change"></span>
+        <div class="stat-card" id="card-period-change">
+          <span class="stat-label">Period Change</span>
+          <span class="stat-value skeleton" id="stat-period-change" aria-live="polite">—</span>
         </div>
 
       </div>
@@ -115,11 +116,11 @@
         <div class="chart-error" id="chart-error" role="alert" hidden>
           <svg class="error-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
             <circle cx="12" cy="12" r="10"/>
-            <line x1="12" y1="8" x2="12" y2="12"/>
+            <line x1="12" y1="8"  x2="12"    y2="12"/>
             <line x1="12" y1="16" x2="12.01" y2="16"/>
           </svg>
           <p class="error-title" id="error-title">Could not load data</p>
-          <p class="error-body" id="error-body">The chart data is temporarily unavailable. Try refreshing in a moment.</p>
+          <p class="error-body"  id="error-body">The chart data is temporarily unavailable. Try refreshing in a moment.</p>
           <button class="btn-retry" id="btn-retry" type="button">Retry</button>
         </div>
 
@@ -156,141 +157,171 @@
     </section>
 
     <!-- ───────────────────────────────────────────────
-         ROW 4: WEEKDAY WIN-RATE MATRIX (Component B)
+         ROW 4: MULTI-PERIOD RETURNS — card_row_2
+         ret-1w, ret-2w, ret-1m, ret-3m, ret-6m, ret-1y, ret-ytd
     ────────────────────────────────────────────── -->
-    <section class="analytics-section" aria-label="Weekday win-rate analytics">
+    <section class="returns-section" aria-label="Multi-period returns">
+      <div class="returns-inner">
+
+        <h2 class="section-title">Returns</h2>
+
+        <div class="returns-grid">
+
+          <div class="return-card" id="ret-1w" aria-label="1 week return">
+            <span class="ret-label">1 Week</span>
+            <span class="ret-pct skeleton">—</span>
+            <span class="ret-pts skeleton">—</span>
+          </div>
+
+          <div class="return-card" id="ret-2w" aria-label="2 week return">
+            <span class="ret-label">2 Weeks</span>
+            <span class="ret-pct skeleton">—</span>
+            <span class="ret-pts skeleton">—</span>
+          </div>
+
+          <div class="return-card" id="ret-1m" aria-label="1 month return">
+            <span class="ret-label">1 Month</span>
+            <span class="ret-pct skeleton">—</span>
+            <span class="ret-pts skeleton">—</span>
+          </div>
+
+          <div class="return-card" id="ret-3m" aria-label="3 month return">
+            <span class="ret-label">3 Months</span>
+            <span class="ret-pct skeleton">—</span>
+            <span class="ret-pts skeleton">—</span>
+          </div>
+
+          <div class="return-card" id="ret-6m" aria-label="6 month return">
+            <span class="ret-label">6 Months</span>
+            <span class="ret-pct skeleton">—</span>
+            <span class="ret-pts skeleton">—</span>
+          </div>
+
+          <div class="return-card" id="ret-1y" aria-label="1 year return">
+            <span class="ret-label">1 Year</span>
+            <span class="ret-pct skeleton">—</span>
+            <span class="ret-pts skeleton">—</span>
+          </div>
+
+          <div class="return-card" id="ret-ytd" aria-label="Year to date return">
+            <span class="ret-label">YTD</span>
+            <span class="ret-pct skeleton">—</span>
+            <span class="ret-pts skeleton">—</span>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- ───────────────────────────────────────────────
+         ROW 5: WEEKDAY INTELLIGENCE — Component B
+         wd-toggle-30d, wd-toggle-1y, wd-table-body, wd-warning
+    ────────────────────────────────────────────── -->
+    <section class="analytics-section" aria-label="Weekday intelligence">
       <div class="analytics-inner">
 
         <div class="analytics-header">
-          <h2 class="analytics-title">Weekday Win Rate</h2>
-          <div class="period-toggle" role="group" aria-label="Select time period">
-            <button class="period-btn active" data-period="1m" type="button">1 Month</button>
-            <button class="period-btn disabled" data-period="3m" type="button" disabled title="Coming in Phase 2">3 Months</button>
-            <button class="period-btn disabled" data-period="3y" type="button" disabled title="Coming in Phase 2">3 Years</button>
+          <h2 class="analytics-title">Weekday Intelligence</h2>
+          <div class="period-toggle" role="group" aria-label="Select lookback period">
+            <button class="period-btn" id="wd-toggle-30d" data-period="30d" type="button">30 Days</button>
+            <button class="period-btn active" id="wd-toggle-1y"  data-period="1y"  type="button">1 Year</button>
           </div>
         </div>
 
-        <div class="weekday-matrix" id="weekday-matrix" role="table" aria-label="Weekday win-rate matrix">
-          <div class="matrix-header" role="row">
-            <div class="matrix-cell header-cell" role="columnheader" data-day="mon">Mon</div>
-            <div class="matrix-cell header-cell" role="columnheader" data-day="tue">Tue</div>
-            <div class="matrix-cell header-cell" role="columnheader" data-day="wed">Wed</div>
-            <div class="matrix-cell header-cell" role="columnheader" data-day="thu">Thu</div>
-            <div class="matrix-cell header-cell" role="columnheader" data-day="fri">Fri</div>
-          </div>
-          <div class="matrix-row" role="row" id="winrate-row">
-            <div class="matrix-cell data-cell skeleton" role="cell" data-day="mon" id="wr-mon">—</div>
-            <div class="matrix-cell data-cell skeleton" role="cell" data-day="tue" id="wr-tue">—</div>
-            <div class="matrix-cell data-cell skeleton" role="cell" data-day="wed" id="wr-wed">—</div>
-            <div class="matrix-cell data-cell skeleton" role="cell" data-day="thu" id="wr-thu">—</div>
-            <div class="matrix-cell data-cell skeleton" role="cell" data-day="fri" id="wr-fri">—</div>
-          </div>
-          <div class="matrix-row subtext-row" role="row" id="wincount-row">
-            <div class="matrix-cell subtext-cell" role="cell" id="wc-mon">— / —</div>
-            <div class="matrix-cell subtext-cell" role="cell" id="wc-tue">— / —</div>
-            <div class="matrix-cell subtext-cell" role="cell" id="wc-wed">— / —</div>
-            <div class="matrix-cell subtext-cell" role="cell" id="wc-thu">— / —</div>
-            <div class="matrix-cell subtext-cell" role="cell" id="wc-fri">— / —</div>
-          </div>
+        <!-- Warning: shown only on 30d view (low sample size) -->
+        <div class="wd-warning" id="wd-warning" role="note" hidden>
+          ⚠️ 30-day view has low sample size — treat win rates with caution.
+        </div>
+
+        <div class="weekday-table-wrapper">
+          <table class="weekday-table" aria-label="Weekday performance matrix">
+            <thead>
+              <tr>
+                <th scope="col">Day</th>
+                <th scope="col">Sessions</th>
+                <th scope="col" class="gain">Green</th>
+                <th scope="col" class="loss">Red</th>
+                <th scope="col">Avg %</th>
+                <th scope="col" class="gain">Best</th>
+                <th scope="col" class="loss">Worst</th>
+                <th scope="col">vs 1Y</th>
+              </tr>
+            </thead>
+            <tbody id="wd-table-body">
+              <!-- Populated by app.js renderWeekdayMatrix() -->
+              <tr><td colspan="8" class="skeleton-row">Loading&hellip;</td></tr>
+            </tbody>
+          </table>
         </div>
 
       </div>
     </section>
 
     <!-- ───────────────────────────────────────────────
-         ROW 5: ADDITIONAL ANALYTICS CARDS
+         ROW 6: ANALYTICS CARDS
+         Gap Analysis (card_row_4) + Volatility Regime (card_row_5)
     ────────────────────────────────────────────── -->
     <section class="cards-section" aria-label="Additional analytics">
       <div class="cards-inner">
 
-        <!-- Card: Gap Analysis -->
+        <!-- Card: Gap Analysis (card_row_4) -->
         <article class="analytics-card" id="card-gap" aria-label="Gap analysis">
           <h3 class="card-title">Gap Analysis</h3>
           <div class="card-body">
             <div class="card-row">
-              <span class="card-label">Gap Up days</span>
-              <span class="card-value skeleton" id="gap-up-days">—</span>
+              <span class="card-label">Post-Weekend avg</span>
+              <span class="card-value skeleton" id="gap-post-weekend">—</span>
             </div>
             <div class="card-row">
-              <span class="card-label">Gap Down days</span>
-              <span class="card-value skeleton" id="gap-down-days">—</span>
+              <span class="card-label">Post-Holiday avg</span>
+              <span class="card-value skeleton" id="gap-post-holiday">—</span>
             </div>
             <div class="card-row">
-              <span class="card-label">Avg Gap Up</span>
-              <span class="card-value skeleton" id="gap-up-avg">—</span>
+              <span class="card-label">Longest green run</span>
+              <span class="card-value skeleton" id="gap-green-streak">—</span>
             </div>
             <div class="card-row">
-              <span class="card-label">Avg Gap Down</span>
-              <span class="card-value skeleton" id="gap-down-avg">—</span>
+              <span class="card-label">Longest red run</span>
+              <span class="card-value skeleton" id="gap-red-streak">—</span>
+            </div>
+            <div class="card-row">
+              <span class="card-label">Days above 30d avg</span>
+              <span class="card-value skeleton" id="gap-above-mean">—</span>
             </div>
           </div>
         </article>
 
-        <!-- Card: Volatility Regime -->
+        <!-- Card: Volatility Regime (card_row_5) -->
         <article class="analytics-card" id="card-volatility" aria-label="Volatility regime">
           <h3 class="card-title">Volatility Regime</h3>
           <div class="card-body">
-            <div class="card-row">
-              <span class="card-label">Current regime</span>
-              <span class="card-value skeleton" id="vol-regime">—</span>
-            </div>
-            <div class="card-row">
-              <span class="card-label">Avg daily move</span>
-              <span class="card-value skeleton" id="vol-avg-move">—</span>
-            </div>
-            <div class="card-row">
-              <span class="card-label">Largest gain</span>
-              <span class="card-value skeleton" id="vol-largest-gain">—</span>
-            </div>
-            <div class="card-row">
-              <span class="card-label">Largest loss</span>
-              <span class="card-value skeleton" id="vol-largest-loss">—</span>
-            </div>
-          </div>
-        </article>
 
-        <!-- Card: Momentum -->
-        <article class="analytics-card" id="card-momentum" aria-label="Price momentum">
-          <h3 class="card-title">Momentum</h3>
-          <div class="card-body">
-            <div class="card-row">
-              <span class="card-label">SMA 20</span>
-              <span class="card-value skeleton" id="mom-sma20">—</span>
+            <!-- Regime summary row -->
+            <div class="vol-regime-row">
+              <span class="vol-regime-icon" id="vol-regime-icon" aria-hidden="true">⚪</span>
+              <span class="card-value skeleton" id="vol-regime-header">—</span>
             </div>
-            <div class="card-row">
-              <span class="card-label">SMA 50</span>
-              <span class="card-value skeleton" id="mom-sma50">—</span>
-            </div>
-            <div class="card-row">
-              <span class="card-label">RSI 14</span>
-              <span class="card-value skeleton" id="mom-rsi14">—</span>
-            </div>
-            <div class="card-row">
-              <span class="card-label">vs SMA 20</span>
-              <span class="card-value skeleton" id="mom-vs-sma20">—</span>
-            </div>
-          </div>
-        </article>
+            <p class="vol-regime-copy skeleton" id="vol-regime-copy"></p>
 
-        <!-- Card: Win/Loss Streak -->
-        <article class="analytics-card" id="card-streak" aria-label="Win and loss streaks">
-          <h3 class="card-title">Streaks</h3>
-          <div class="card-body">
             <div class="card-row">
-              <span class="card-label">Current streak</span>
-              <span class="card-value skeleton" id="streak-current">—</span>
+              <span class="card-label">Avg daily swing</span>
+              <span class="card-value skeleton" id="vol-avg-swing">—</span>
             </div>
             <div class="card-row">
-              <span class="card-label">Longest win run</span>
-              <span class="card-value skeleton" id="streak-win">—</span>
+              <span class="card-label">1Y norm swing</span>
+              <span class="card-value skeleton" id="vol-1y-norm">—</span>
             </div>
             <div class="card-row">
-              <span class="card-label">Longest loss run</span>
-              <span class="card-value skeleton" id="streak-loss">—</span>
+              <span class="card-label">High-vol days</span>
+              <span class="card-value skeleton" id="vol-high-days">—</span>
             </div>
             <div class="card-row">
-              <span class="card-label">Win rate (30d)</span>
-              <span class="card-value skeleton" id="streak-winrate">—</span>
+              <span class="card-label">Calm days</span>
+              <span class="card-value skeleton" id="vol-calm-days">—</span>
+            </div>
+            <div class="card-row">
+              <span class="card-label">Period drawdown</span>
+              <span class="card-value skeleton" id="vol-drawdown">—</span>
             </div>
           </div>
         </article>
@@ -310,8 +341,8 @@
     aria-live="polite"
     hidden
   >
-    <div class="tooltip-date" id="tooltip-date"></div>
-    <div class="tooltip-close" id="tooltip-close"></div>
+    <div class="tooltip-date"   id="tooltip-date"></div>
+    <div class="tooltip-close"  id="tooltip-close"></div>
     <div class="tooltip-change" id="tooltip-change"></div>
   </div>
 
@@ -324,9 +355,9 @@
         Data sourced from NSE. For informational purposes only &mdash; not investment advice.
       </p>
       <p class="footer-links">
-        <a href="https://fundyourfreedom.in" target="_blank" rel="noopener noreferrer">Fund Your Freedom</a>
+        <a href="https://fundyourfreedom.in"          target="_blank" rel="noopener noreferrer">Fund Your Freedom</a>
         &middot;
-        <a href="https://markets.fundyourfreedom.in" target="_blank" rel="noopener noreferrer">Markets</a>
+        <a href="https://markets.fundyourfreedom.in"  target="_blank" rel="noopener noreferrer">Markets</a>
         &middot;
         <a href="https://github.com/HABSGconsulting/fyf-nifty-ui" target="_blank" rel="noopener noreferrer">View source</a>
       </p>
@@ -336,9 +367,13 @@
     </div>
   </footer>
 
-  <!-- D3.js v7 (scale math only) -->
-  <script src="https://cdn.jsdelivr.net/npm/d3-scale@4/dist/d3-scale.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/d3-array@3/dist/d3-array.min.js"></script>
+  <!--
+    D3 v7 — full bundle loaded as window.d3
+    app.js uses: d3.scaleLinear(), d3.min(), d3.max(), yScale.ticks()
+    The previous split-package approach (d3-scale + d3-array separately)
+    does NOT create window.d3 and breaks renderChart(). Use the full UMD bundle.
+  -->
+  <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
 
   <!-- Main app -->
   <script src="app.js"></script>
