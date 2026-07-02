@@ -71,7 +71,7 @@ jobs:
           cd engine
           git add data/chart-data.json
           git diff --cached --quiet || git commit -m "nifty-bot: kv-sync $(date +%Y-%m-%d) [skip ci]"
-          git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/HABSGconsulting/fyf-nifty-engine.git HEAD:main
+          git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/HABSGconsulting/fyf-nifty-engine.git HEAD:master
 
       - name: Alert on failure
         if: failure()

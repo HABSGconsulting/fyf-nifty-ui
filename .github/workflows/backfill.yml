@@ -93,7 +93,7 @@ jobs:
           cd engine
           git add data/snapshots/ data/chart-data.json
           git diff --cached --quiet || git commit -m "nifty-bot: backfill ${{ github.event.inputs.start_date }} to ${{ github.event.inputs.end_date }} [skip ci]"
-          git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/HABSGconsulting/fyf-nifty-engine.git HEAD:main
+          git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/HABSGconsulting/fyf-nifty-engine.git HEAD:master
 
       - name: Alert on failure
         if: failure()
