@@ -390,6 +390,11 @@ ul, ol { list-style: none; }
   color: var(--color-text-muted);
 }
 
+/* FIX: .chart-error uses display:flex above, which overrides the browser's
+   native [hidden] attribute (display:none). This rule restores correct behaviour
+   so hideError() in app.js actually hides the overlay when data loads. */
+.chart-error[hidden] { display: none !important; }
+
 .error-icon { width: 40px; height: 40px; color: var(--color-text-faint); }
 .error-title { font-size: var(--text-base); font-weight: 600; color: var(--color-text); }
 .error-body  { font-size: var(--text-sm); max-width: 36ch; }
