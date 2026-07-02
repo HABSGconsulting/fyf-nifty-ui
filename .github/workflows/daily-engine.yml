@@ -74,13 +74,14 @@ jobs:
         run: python engine/pipeline/kv_writer.py
 
       # 9. Commit new snapshot (and any acquired holiday files) back to engine repo
+      # FIX: push to HEAD:master — fyf-nifty-engine default branch is master, not main
       - name: Commit to engine repo
         run: |
           cd engine
           git add data/snapshots/ pipeline/nse_holidays_*.json data/chart-data.json
           # Only commit if there are staged changes
           git diff --cached --quiet || git commit -m "nifty-bot: snapshot $(date +%Y-%m-%d) [skip ci]"
-          git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/HABSGconsulting/fyf-nifty-engine.git HEAD:main
+          git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/HABSGconsulting/fyf-nifty-engine.git HEAD:master
 
       # 10. Open a GitHub Issue on failure
       - name: Alert on failure
