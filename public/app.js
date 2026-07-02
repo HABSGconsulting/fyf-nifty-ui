@@ -22,7 +22,9 @@
     dataUrl:     '/api/nifty-data',
     fallbackUrl: './chart-data.json',
 
-    staleThresholdMs: 26 * 60 * 60 * 1000, // 26 hours
+    // FIX #4: raised from 26h to 30h — pipeline runs at 4:05 PM IST;
+    // 26h threshold caused false-stale every morning before next run.
+    staleThresholdMs: 30 * 60 * 60 * 1000, // 30 hours
 
     chart: {
       marginTop:    24,
@@ -226,7 +228,7 @@
 
   function render(d) {
     hideSkeleton();
-    hideError(); // FIX: always dismiss any stale error overlay on successful load
+    hideError(); // always dismiss any stale error overlay on successful load
     updateStatus(d);
     renderChart(d);
     renderCardRow1(d);
@@ -241,7 +243,6 @@
   ───────────────────────────────────────────────────────────── */
 
   function updateStatus(d) {
-    // Schema v1.1: d.meta.last_updated
     const raw = d.meta && d.meta.last_updated;
     const generatedAt = raw ? new Date(raw) : null;
 
@@ -275,7 +276,7 @@
     if (!svg) return;
     svg.innerHTML = '';
 
-    // ── Dimensions ──────────────────────────────────────────────
+    // ── Dimensions ────────────────────────────────────────────
     const wrapper = DOM.scrollWrapper;
     const totalW  = Math.max(wrapper ? wrapper.clientWidth : 900, days.length * 22);
     const totalH  = 320;
@@ -287,12 +288,9 @@
     svg.setAttribute('height',  totalH);
     svg.setAttribute('viewBox', `0 0 ${totalW} ${totalH}`);
 
-    // ── Scales ──────────────────────────────────────────────────
-    // Column width = chart_width / number_of_days (per doc 09)
+    // ── Scales ─────────────────────────────────────────────
     const colW = innerW / days.length;
 
-    // Y scale: domain from analytics.component_a window_low/high
-    // with 0.5% padding per doc 09 spec
     const compA    = (d.analytics && d.analytics.component_a) || {};
     const tradingDays = days.filter(b => b.type === 'trading');
     const yDomainMin = compA.window_low  ? compA.window_low.value  * 0.995
@@ -306,11 +304,11 @@
       .domain([yDomainMin, yDomainMax])
       .range([mT + innerH, mT]);
 
-    // ── Root group ──────────────────────────────────────────────
+    // ── Root group ────────────────────────────────────────────
     const g = svgEl('g', {});
     svg.appendChild(g);
 
-    // ── Grid lines (5–7 lines per doc 09) ───────────────────────
+    // ── Grid lines ────────────────────────────────────────────
     const ticks = yScale.ticks(6);
     ticks.forEach(tick => {
       g.appendChild(svgEl('line', {
@@ -321,7 +319,7 @@
       }));
     });
 
-    // ── Y-axis labels ────────────────────────────────────────────
+    // ── Y-axis labels ───────────────────────────────────────────
     ticks.forEach(tick => {
       const t = svgEl('text', {
         x: mL - 6, y: yScale(tick),
@@ -336,7 +334,7 @@
       g.appendChild(t);
     });
 
-    // ── Columns ─────────────────────────────────────────────────
+    // ── Columns ─────────────────────────────────────────────
     days.forEach((day, i) => {
       const bx = mL + i * colW;
       const cx = bx + colW / 2;
@@ -349,10 +347,16 @@
           fill: CFG.colours.nonTrading,
         }));
 
-        // Centred label: SAT / SUN / holiday short name
-        const label = day.type === 'nse_holiday'
-          ? (day.holiday_name ? day.holiday_name.substring(0, 8) : 'HOL')
-          : (day.weekday_short || '');
+        // FIX #5: use a short (max 3-char) label to avoid overflow in vertical SVG text
+        // holiday_name can be long; use first word max 3 chars, or SAT/SUN
+        let label;
+        if (day.type === 'nse_holiday') {
+          // Take the first word of the holiday name and cap at 3 chars for the vertical label
+          const firstWord = day.holiday_name ? day.holiday_name.split(' ')[0] : 'HOL';
+          label = firstWord.substring(0, 3).toUpperCase();
+        } else {
+          label = day.weekday_short || ''; // 'Sat' or 'Sun'
+        }
 
         if (label) {
           const lt = svgEl('text', {
@@ -369,9 +373,17 @@
           g.appendChild(lt);
         }
 
+        // FIX #3: attach tooltip to non-trading columns (spec doc 09 requires it)
+        const nonTradingHit = svgEl('rect', {
+          x: bx, y: mT, width: colW, height: innerH,
+          fill: 'transparent',
+          style: 'cursor:default',
+        });
+        attachNonTradingTooltip(nonTradingHit, day);
+        g.appendChild(nonTradingHit);
+
       } else {
         // Trading column
-        // bar_base = min(close, prev_close), bar_top = max(close, prev_close) — from schema
         const yBase = yScale(day.bar_base);
         const yTop  = yScale(day.bar_top);
         const barW  = colW * CFG.chart.barWidthRatio;
@@ -413,8 +425,7 @@
         g.appendChild(hitArea);
       }
 
-      // ── X-axis weekday badge ───────────────────────────────────
-      // Use day.type === 'nse_holiday' badge if applicable, else weekday
+      // ── X-axis weekday badge ──────────────────────────────
       const badgeKey = day.type === 'nse_holiday' ? 'nse_holiday' : (day.weekday || '');
       const badge    = CFG.weekdayBadge[badgeKey] || { bg: '#1e293b', text: '#64748b' };
       const labelTxt = formatBarDate(day.date);
@@ -440,18 +451,40 @@
       g.appendChild(badgeText);
     });
 
-    // ── Bridge connector lines (from bridges[] array) ────────────
-    // per doc 09: dashed horizontal at bridge_y across non-trading band
+    // ── Bridge connector lines (from bridges[] array) ──────────────────
+    // FIX #2: Per doc 09 spec:
+    //   x1 = right edge of last trading column before the gap
+    //        bridge.start_date is the first non-trading day (e.g. Saturday),
+    //        so the trading column before it is at index (startIdx - 1).
+    //        Right edge of that column = mL + startIdx * colW
+    //        (i.e. the left edge of start_date column, which equals the right edge of
+    //        the preceding trading column — correct).
+    //   x2 = left edge of first trading column after the gap
+    //        bridge.end_date is the last non-trading day (e.g. Sunday or holiday).
+    //        The first trading day after the gap is at index (endIdx + 1).
+    //        Left edge of that column = mL + (endIdx + 1) * colW
+    //        BUT we must resolve the NEXT trading day index properly, not assume
+    //        it immediately follows end_date — find it explicitly.
     if (Array.isArray(d.bridges)) {
       d.bridges.forEach(bridge => {
         const startIdx = days.findIndex(day => day.date === bridge.start_date);
         const endIdx   = days.findIndex(day => day.date === bridge.end_date);
         if (startIdx < 0 || endIdx < 0) return;
 
-        // x1 = right edge of column before the band
-        // x2 = left edge of column after the band
+        // x1: right edge of the trading day before the non-trading band
+        // = left edge of start_date column (start_date is first non-trading day)
         const x1 = mL + startIdx * colW;
-        const x2 = mL + (endIdx + 1) * colW;
+
+        // x2: left edge of the first trading day after the non-trading band
+        // Find the first trading day after endIdx
+        const nextTradingIdx = days.findIndex(
+          (day, idx) => idx > endIdx && day.type === 'trading'
+        );
+        // If no trading day follows (end of data), fall back to right edge of endIdx
+        const x2 = nextTradingIdx >= 0
+          ? mL + nextTradingIdx * colW
+          : mL + (endIdx + 1) * colW;
+
         const y  = yScale(bridge.bridge_y);
 
         g.appendChild(svgEl('line', {
@@ -478,6 +511,40 @@
       showTooltip(e.touches[0], day);
     }, { passive: false });
     el.addEventListener('touchend', hideTooltip);
+  }
+
+  // FIX #3: separate handler for non-trading columns (spec doc 09)
+  // Shows "Market Closed (Weekend)" or "Market Closed (Holiday Name)"
+  function attachNonTradingTooltip(el, day) {
+    el.addEventListener('mouseenter', e => showNonTradingTooltip(e, day));
+    el.addEventListener('mousemove',  e => moveTooltip(e));
+    el.addEventListener('mouseleave', hideTooltip);
+    el.addEventListener('touchstart', e => {
+      e.preventDefault();
+      showNonTradingTooltip(e.touches[0], day);
+    }, { passive: false });
+    el.addEventListener('touchend', hideTooltip);
+  }
+
+  function showNonTradingTooltip(e, day) {
+    if (!DOM.tooltip) return;
+
+    if (DOM.tooltipDate) {
+      DOM.tooltipDate.textContent = formatTooltipDate(day.date, day.weekday);
+    }
+    if (DOM.tooltipClose) {
+      const reason = day.type === 'nse_holiday' && day.holiday_name
+        ? `Market Closed (${day.holiday_name})`
+        : 'Market Closed (Weekend)';
+      DOM.tooltipClose.textContent = reason;
+    }
+    if (DOM.tooltipChange) {
+      DOM.tooltipChange.textContent = '';
+      DOM.tooltipChange.className = 'tooltip-change neutral';
+    }
+
+    DOM.tooltip.removeAttribute('hidden');
+    moveTooltip(e);
   }
 
   function showTooltip(e, day) {
@@ -563,7 +630,6 @@
       if (!data) { setText(el, 'N/A'); return; }
       const s = sign(data.pct);
 
-      // FIX: explicitly remove skeleton from inner spans and set text
       const pctEl = el.querySelector('.ret-pct');
       const ptsEl = el.querySelector('.ret-pts');
       if (pctEl) {
@@ -591,7 +657,6 @@
     const data = compB[wdLookback] || compB['1y'];
     if (!data) return;
 
-    // Warning badge: only on 30d view
     if (DOM.wdWarning) {
       DOM.wdWarning.hidden = (wdLookback !== '30d');
     }
@@ -624,7 +689,6 @@
           <td class="loss">${row.worst_session ? `${row.worst_session.value.toFixed(2)}%` : '—'}</td>
           <td class="${dev != null ? (dev >= 0 ? 'gain' : 'loss') : ''}">${devTxt}</td>`;
 
-        // Divergence signal: |deviation| > 0.20 on 30d view
         if (wdLookback === '30d' && dev != null && Math.abs(dev) > 0.20) {
           const signal = document.createElement('tr');
           const ratio  = row.avg_pct_change !== 0 && (data[wd] || {})
@@ -654,7 +718,6 @@
     const r = d.analytics && d.analytics.card_row_4;
     if (!r) return;
 
-    // Data period label
     if (DOM.gapPeriod && d.meta) {
       const start = d.meta.window_start ? fmtDate(d.meta.window_start) : null;
       const end   = d.meta.window_end   ? fmtDate(d.meta.window_end)   : null;
@@ -672,7 +735,6 @@
       setColour(DOM.gapPostHoliday, r.post_holiday_avg_pct >= 0 ? 'gain' : 'loss');
     }
 
-    // FIX: include green/red day counts and date range on streaks
     if (DOM.gapGreenStreak && r.longest_green_streak) {
       const gs = r.longest_green_streak;
       const totalTradingDays = d.days ? d.days.filter(x => x.type === 'trading').length : null;
@@ -706,7 +768,6 @@
   const REGIME_ICONS  = { calm: '🟢', elevated: '🟡', high_volatility: '🔴' };
   const REGIME_CLASS  = { calm: 'gain', elevated: 'warning', high_volatility: 'loss' };
 
-  // Hover tooltip definitions for volatility metric labels
   const VOL_TOOLTIPS = {
     'vol-avg-swing-label':  'Average intraday range (high minus low close-to-close) across all trading sessions in the window.',
     'vol-1y-norm-label':    'The 1-year historical average daily swing — used as a baseline to judge whether the current period is calm or volatile.',
@@ -719,7 +780,6 @@
     const r = d.analytics && d.analytics.card_row_5;
     if (!r) return;
 
-    // Data period label
     if (DOM.volPeriod && d.meta) {
       const start = d.meta.window_start ? fmtDate(d.meta.window_start) : null;
       const end   = d.meta.window_end   ? fmtDate(d.meta.window_end)   : null;
@@ -751,7 +811,6 @@
       setColour(DOM.volDrawdown, 'loss');
     }
 
-    // Attach hover title definitions to vol metric label elements
     Object.entries(VOL_TOOLTIPS).forEach(([id, tip]) => {
       const el = $(id);
       if (el) el.title = tip;
@@ -849,10 +908,9 @@
     if (!dateStr) return '';
     try {
       const dt = new Date(dateStr + 'T00:00:00');
-      const base = dt.toLocaleDateString('en-IN', {
+      return dt.toLocaleDateString('en-IN', {
         weekday: 'long', day: 'numeric', month: 'long',
       });
-      return base;
     } catch { return dateStr; }
   }
 
