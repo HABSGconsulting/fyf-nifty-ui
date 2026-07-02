@@ -51,7 +51,46 @@ jobs:
           git -C engine config user.name "fyf-nifty-bot"
           git -C engine config user.email "bot@fundyourfreedom.in"
 
-      # 6. Fetch OHLCV — holiday check + NSE primary + fallback chain + snapshot write
+      # 6. Gap-fill: backfill any missing trading days between the last snapshot and yesterday.
+      #    Uses backfill_bulk.py (single yfinance call) — skips if no gap found.
+      - name: Gap-fill missing snapshots
+        run: |
+          python - <<'EOF'
+          import os, glob, sys
+          from datetime import date, timedelta
+
+          SNAPSHOT_DIR = "engine/data/snapshots"
+
+          # Find the most recent snapshot date on disk
+          files = sorted(glob.glob(os.path.join(SNAPSHOT_DIR, "????-??-??.json")))
+          if not files:
+              print("No snapshots found — skipping gap-fill (backfill needed first)")
+              sys.exit(0)
+
+          last_snap = date.fromisoformat(os.path.basename(files[-1]).replace(".json", ""))
+          yesterday = date.today() - timedelta(days=1)
+
+          if last_snap >= yesterday:
+              print(f"No gap: last snapshot is {last_snap}, yesterday is {yesterday}")
+              sys.exit(0)
+
+          gap_start = last_snap + timedelta(days=1)
+          print(f"Gap detected: {gap_start} → {yesterday}. Running backfill_bulk.py...")
+
+          # Write gap bounds to env file for next step
+          with open(os.environ["GITHUB_ENV"], "a") as f:
+              f.write(f"GAP_START={gap_start}\n")
+              f.write(f"GAP_END={yesterday}\n")
+              f.write("RUN_GAP_FILL=true\n")
+          EOF
+
+      - name: Run backfill_bulk.py for gap (if needed)
+        if: env.RUN_GAP_FILL == 'true'
+        run: |
+          echo "Backfilling $GAP_START → $GAP_END"
+          python engine/pipeline/backfill_bulk.py --start $GAP_START --end $GAP_END
+
+      # 7. Fetch OHLCV for today — holiday check + NSE primary + fallback chain + snapshot write
       - name: Run fetch_nifty.py
         env:
           CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
@@ -61,11 +100,11 @@ jobs:
           GH_PAT: ${{ secrets.GH_PAT }}
         run: python engine/pipeline/fetch_nifty.py
 
-      # 7. Build analytics + assemble chart-data.json
+      # 8. Build analytics + assemble chart-data.json
       - name: Run build_chart_data.py
         run: python engine/pipeline/build_chart_data.py
 
-      # 8. Write chart-data.json to Cloudflare KV
+      # 9. Write chart-data.json to Cloudflare KV
       - name: Run kv_writer.py
         env:
           CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
@@ -73,8 +112,7 @@ jobs:
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
         run: python engine/pipeline/kv_writer.py
 
-      # 9. Commit new snapshot (and any acquired holiday files) back to engine repo
-      # FIX: push to HEAD:master — fyf-nifty-engine default branch is master, not main
+      # 10. Commit new snapshot (and any acquired holiday files) back to engine repo
       - name: Commit to engine repo
         run: |
           cd engine
@@ -83,7 +121,7 @@ jobs:
           git diff --cached --quiet || git commit -m "nifty-bot: snapshot $(date +%Y-%m-%d) [skip ci]"
           git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/HABSGconsulting/fyf-nifty-engine.git HEAD:master
 
-      # 10. Open a GitHub Issue on failure
+      # 11. Open a GitHub Issue on failure
       - name: Alert on failure
         if: failure()
         uses: actions/github-script@v7
